@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">RMBLR</string>
+    <string name="accessibility_label">RMBLR orb</string>
+    <string name="accessibility_description">Lets the RMBLR orb appear when you tap a text field, and write your dictated text straight into that field instead of leaving it on the clipboard.</string>
+</resources>

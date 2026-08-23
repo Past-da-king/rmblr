@@ -1,0 +1,20 @@
+# Build output
+build/
+app/build/
+.gradle/
+local.properties
+.cxx/
+
+# Signing. Never commit these.
+*.jks
+*.keystore
+keystore.properties
+
+# Secrets
+.env
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+captures/

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    A waveform, because that is what the app is: speech going in, words coming out.
+    Bars rise toward the centre the way a spoken phrase does, drawn on the 108dp
+    adaptive canvas with everything kept inside the 66dp safe zone.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path android:fillColor="#EDEFF3" android:pathData="M31,50 h5 a2.5,2.5 0 0 1 2.5,2.5 v3 a2.5,2.5 0 0 1 -2.5,2.5 h-5 a2.5,2.5 0 0 1 -2.5,-2.5 v-3 a2.5,2.5 0 0 1 2.5,-2.5 z" />
+    <path android:fillColor="#EDEFF3" android:pathData="M40,43 h5 a2.5,2.5 0 0 1 2.5,2.5 v17 a2.5,2.5 0 0 1 -2.5,2.5 h-5 a2.5,2.5 0 0 1 -2.5,-2.5 v-17 a2.5,2.5 0 0 1 2.5,-2.5 z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M49,33 h5 a2.5,2.5 0 0 1 2.5,2.5 v37 a2.5,2.5 0 0 1 -2.5,2.5 h-5 a2.5,2.5 0 0 1 -2.5,-2.5 v-37 a2.5,2.5 0 0 1 2.5,-2.5 z" />
+    <path android:fillColor="#EDEFF3" android:pathData="M58,40 h5 a2.5,2.5 0 0 1 2.5,2.5 v23 a2.5,2.5 0 0 1 -2.5,2.5 h-5 a2.5,2.5 0 0 1 -2.5,-2.5 v-23 a2.5,2.5 0 0 1 2.5,-2.5 z" />
+    <path android:fillColor="#EDEFF3" android:pathData="M67,47 h5 a2.5,2.5 0 0 1 2.5,2.5 v9 a2.5,2.5 0 0 1 -2.5,2.5 h-5 a2.5,2.5 0 0 1 -2.5,-2.5 v-9 a2.5,2.5 0 0 1 2.5,-2.5 z" />
+</vector>
