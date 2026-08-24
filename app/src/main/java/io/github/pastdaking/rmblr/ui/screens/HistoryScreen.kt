@@ -118,7 +118,7 @@ fun HistoryScreen(
             if (historyItems.isEmpty()) {
                 EmptyState(
                     headline = "Nothing dictated yet",
-                    body = "Tap the mic on the Keyboard tab and say something. It lands here."
+                    body = "Tap a text box in any app, tap the orb, and say something. It lands here."
                 )
             } else {
                 LazyColumn(

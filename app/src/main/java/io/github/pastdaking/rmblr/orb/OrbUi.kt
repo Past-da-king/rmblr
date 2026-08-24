@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -201,13 +202,25 @@ fun OrbFan(
     val radius = 116.dp
     val chipWidth = 128.dp
     val chipHeight = 34.dp
+    val margin = 8.dp
 
-    Box(modifier = modifier.fillMaxSize().background(Ink.copy(alpha = 0.62f))) {
+    // Always a dark wash, whatever the theme. In light mode the scrim used to be the light
+    // Ink, which dimmed nothing and left white chips floating unreadably over the keyboard.
+    BoxWithConstraints(modifier = modifier.fillMaxSize().background(Color(0xFF0A0B0D).copy(alpha = 0.55f))) {
+        val maxX = maxWidth - chipWidth - margin
+        val maxY = maxHeight - chipHeight - margin
+
         items.forEachIndexed { index, preset ->
             val angle = fanAngleDegrees(index, items.size, openRight)
             val radians = Math.toRadians(angle.toDouble())
             val dx = (radius.value * kotlin.math.cos(radians)).dp
             val dy = (radius.value * kotlin.math.sin(radians)).dp
+
+            // The arc points away from the parked edge, but a chip centred near the orb's own
+            // x still hangs off the screen. Clamping keeps every label fully readable, which
+            // matters more than the chip sitting exactly on the arc.
+            val x = (centre.x + dx - chipWidth / 2).coerceIn(margin, maxOf(margin, maxX))
+            val y = (centre.y + dy - chipHeight / 2).coerceIn(margin, maxOf(margin, maxY))
 
             ActionChip(
                 label = preset.name,
@@ -215,10 +228,7 @@ fun OrbFan(
                 modifier = Modifier
                     .width(chipWidth)
                     .height(chipHeight)
-                    .offset(
-                        x = centre.x + dx - chipWidth / 2,
-                        y = centre.y + dy - chipHeight / 2
-                    )
+                    .offset(x = x, y = y)
             )
         }
     }

@@ -1,3 +1,5 @@
+![RMBLR](docs/banner.png)
+
 # RMBLR
 
 Speak into any Android app. RMBLR writes it down, tidies it up, and puts the text
@@ -32,6 +34,14 @@ once, in the Profiles tab.
 A tone is a name and a system prompt, nothing more. The built-ins are a starting
 point — write your own ("Rewrite this as a short LinkedIn post, no hashtags") and it
 appears on the arc alongside them.
+
+---
+
+## What it looks like
+
+| The arc, over whatever you were typing in | Size, placement, permissions | Per-app profiles |
+|---|---|---|
+| ![arc](docs/screenshot-arc.png) | ![home](docs/screenshot-home.png) | ![profiles](docs/screenshot-profiles.png) |
 
 ---
 
