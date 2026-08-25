@@ -44,7 +44,9 @@ object GroqApiClient {
         wavBytes: ByteArray,
         apiKey: String,
         model: String = DEFAULT_MODEL,
-        languageCode: String? = null
+        languageCode: String? = null,
+        /** Whisper's `prompt` is context, not an instruction: a word list steers spelling. */
+        vocabulary: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             return@withContext Result.failure(
@@ -67,6 +69,7 @@ object GroqApiClient {
                 .addFormDataPart("response_format", "json")
                 .apply {
                     if (!languageCode.isNullOrBlank()) addFormDataPart("language", languageCode)
+                    if (!vocabulary.isNullOrBlank()) addFormDataPart("prompt", vocabulary)
                 }
                 .build()
 

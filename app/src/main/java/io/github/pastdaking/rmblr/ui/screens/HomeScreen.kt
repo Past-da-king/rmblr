@@ -4,6 +4,13 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import io.github.pastdaking.rmblr.ai.Translator
+import io.github.pastdaking.rmblr.data.languageFor
+import io.github.pastdaking.rmblr.ui.components.Radius
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -60,6 +67,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import io.github.pastdaking.rmblr.ai.DictationController
 import io.github.pastdaking.rmblr.audio.AudioRecorderManager
 import io.github.pastdaking.rmblr.data.CleanupPreset
+import io.github.pastdaking.rmblr.data.DictionaryRepository
 import io.github.pastdaking.rmblr.data.DictationHistoryItem
 import io.github.pastdaking.rmblr.data.HistoryRepository
 import io.github.pastdaking.rmblr.data.PreferencesManager
@@ -115,7 +123,7 @@ fun HomeScreen(
     val clipboard = LocalClipboardManager.current
 
     val recorder = remember { AudioRecorderManager(context) }
-    val dictation = remember { DictationController(prefsManager, recorder) }
+    val dictation = remember { DictationController(prefsManager, recorder, DictionaryRepository.getInstance(context)) }
     val isRecording by recorder.isRecording.collectAsState()
     val amplitude by recorder.audioAmplitude.collectAsState()
     // Only ever non-empty on a streaming engine, which is the point: on Gemini Live you
@@ -125,6 +133,12 @@ fun HomeScreen(
     val currentMode by prefsManager.transcriptionModeFlow.collectAsState()
     val currentPreset by prefsManager.presetFlow.collectAsState()
     val orbEnabled by prefsManager.floatingEnabledFlow.collectAsState()
+
+    val translateOn by prefsManager.translateEnabledFlow.collectAsState()
+    val translateTarget by prefsManager.translateTargetFlow.collectAsState()
+    var toTranslate by remember { mutableStateOf("") }
+    var translated by remember { mutableStateOf<String?>(null) }
+    var translating by remember { mutableStateOf(false) }
 
     var transcript by remember { mutableStateOf<String?>(null) }
     var working by remember { mutableStateOf(false) }
@@ -336,6 +350,169 @@ fun HomeScreen(
                 onClick = onNavigateToVoiceStudio,
                 icon = Icons.Default.Tune
             )
+        }
+
+        Spacer(Modifier.height(Space.xxl))
+
+        // Translation sits here rather than in Settings because it is a thing the orb
+        // DOES, like dictating — not a preference. Which model performs it, and into
+        // what language, is configuration and stays in Settings.
+        SectionLabel("Translate what you copy")
+
+        Panel {
+            SettingRow(
+                label = "Turn it on",
+                icon = Icons.Default.Translate,
+                trailing = {
+                    Switch(
+                        checked = translateOn,
+                        onCheckedChange = { prefsManager.setTranslateEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Ink,
+                            checkedTrackColor = Accent,
+                            checkedBorderColor = Accent,
+                            uncheckedThumbColor = TextLow,
+                            uncheckedTrackColor = Raised,
+                            uncheckedBorderColor = Line
+                        )
+                    )
+                }
+            )
+
+            Spacer(Modifier.height(Space.md))
+            Text(
+                text = "Copy any text and the orb appears with a translate mark. Tap it and the " +
+                    "translation comes back in a bubble. The clipboard is read at the moment you " +
+                    "tap and at no other time.",
+                color = TextMid,
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            Spacer(Modifier.height(Space.lg))
+            Hairline()
+            Spacer(Modifier.height(Space.lg))
+
+            Text(
+                text = "Or paste something here, into ${languageFor(translateTarget).label}",
+                color = TextLow,
+                style = MaterialTheme.typography.labelSmall
+            )
+            Spacer(Modifier.height(Space.sm))
+
+            OutlinedTextField(
+                value = toTranslate,
+                onValueChange = { toTranslate = it },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(Radius.control),
+                textStyle = MaterialTheme.typography.bodyMedium,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Accent,
+                    unfocusedBorderColor = Line,
+                    focusedTextColor = TextHigh,
+                    unfocusedTextColor = TextHigh,
+                    cursorColor = Accent,
+                    focusedContainerColor = Raised,
+                    unfocusedContainerColor = Raised
+                ),
+                placeholder = {
+                    Text("Paste text to translate", color = TextLow, style = MaterialTheme.typography.bodyMedium)
+                }
+            )
+
+            Spacer(Modifier.height(Space.md))
+            PrimaryAction(
+                text = if (translating) "Translating" else "Translate",
+                enabled = toTranslate.isNotBlank() && !translating,
+                onClick = {
+                    translating = true
+                    translated = null
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            Translator.translate(toTranslate, prefsManager)
+                        }
+                        translating = false
+                        translated = result.getOrElse { it.message ?: "Could not translate that." }
+                    }
+                }
+            )
+
+            translated?.let { out ->
+                Spacer(Modifier.height(Space.lg))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    Text(
+                        text = out,
+                        color = TextHigh,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(Space.md))
+                    IconButton(
+                        onClick = { clipboard.setText(AnnotatedString(out)) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = TextMid, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(Space.xxl))
+
+        // Mode and Style used to live on a Voice Studio page that nothing in the app
+        // navigated to — the button that claimed to open it went to Profiles instead, so
+        // these two controls existed and were unreachable. They belong with the rest of
+        // the orb's behaviour.
+        SectionLabel("How it writes")
+
+        Panel {
+            Text("Mode", color = TextLow, style = MaterialTheme.typography.labelSmall)
+            Spacer(Modifier.height(Space.sm))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TranscriptionMode.values().forEach { mode ->
+                    SideChoice(
+                        label = mode.title,
+                        active = currentMode == mode,
+                        onClick = { prefsManager.setTranscriptionMode(mode) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(Space.md))
+            Text(
+                text = currentMode.subtitle,
+                color = TextMid,
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            if (currentMode == TranscriptionMode.POST_PROCESS_CLEANUP) {
+                Spacer(Modifier.height(Space.lg))
+                Hairline()
+                Spacer(Modifier.height(Space.lg))
+
+                Text("Style", color = TextLow, style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.height(Space.sm))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                ) {
+                    CleanupPreset.values().filter { it != CleanupPreset.CUSTOM }.forEach { preset ->
+                        SideChoice(
+                            label = preset.displayName,
+                            active = currentPreset == preset,
+                            onClick = { prefsManager.setCleanupPreset(preset) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(Space.md))
+                Text(
+                    text = currentPreset.description,
+                    color = TextMid,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
 
         Spacer(Modifier.height(Space.xxl))

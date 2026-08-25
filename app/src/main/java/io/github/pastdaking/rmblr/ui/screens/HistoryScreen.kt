@@ -1,6 +1,11 @@
 package io.github.pastdaking.rmblr.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.platform.LocalContext
+import io.github.pastdaking.rmblr.data.DictionaryEntry
+import io.github.pastdaking.rmblr.data.DictionaryRepository
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +76,18 @@ fun HistoryScreen(
     val historyItems by historyRepo.historyFlow.collectAsState()
     val snippetItems by historyRepo.snippetsFlow.collectAsState()
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+
+    val dictionary = remember { DictionaryRepository.getInstance(context) }
+    val words by dictionary.entries.collectAsState()
+
+    // Recomputed only when one of its inputs actually changes: mining every dictation
+    // on each recomposition would be wasteful for a list that barely moves.
+    val suggestions = remember(historyItems, words) {
+        DictionaryRepository.suggestionsFrom(historyItems, words)
+    }
+    var newWord by remember { mutableStateOf("") }
+    var newSpelling by remember { mutableStateOf("") }
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var showAddSnippet by remember { mutableStateOf(false) }
@@ -98,7 +115,7 @@ fun HistoryScreen(
                 IconButton(onClick = { historyRepo.clearHistory() }) {
                     Icon(Icons.Default.Delete, contentDescription = "Clear history", tint = TextMid)
                 }
-            } else if (selectedTab == 1) {
+            } else if (selectedTab == 2) {
                 IconButton(onClick = { showAddSnippet = !showAddSnippet }) {
                     Icon(Icons.Default.Add, contentDescription = "New snippet", tint = Accent)
                 }
@@ -109,7 +126,8 @@ fun HistoryScreen(
 
         Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
             SegmentTab("Dictations", historyItems.size, selectedTab == 0) { selectedTab = 0 }
-            SegmentTab("Snippets", snippetItems.size, selectedTab == 1) { selectedTab = 1 }
+            SegmentTab("Dictionary", words.size, selectedTab == 1) { selectedTab = 1 }
+            SegmentTab("Snippets", snippetItems.size, selectedTab == 2) { selectedTab = 2 }
         }
 
         Spacer(Modifier.height(Space.lg))
@@ -135,6 +153,24 @@ fun HistoryScreen(
                     }
                 }
             }
+        } else if (selectedTab == 1) {
+            DictionaryTab(
+                words = words,
+                suggestions = suggestions,
+                newWord = newWord,
+                newSpelling = newSpelling,
+                onNewWord = { newWord = it },
+                onNewSpelling = { newSpelling = it },
+                onAdd = {
+                    if (dictionary.add(newWord, newSpelling)) {
+                        newWord = ""
+                        newSpelling = ""
+                    }
+                },
+                onAddSuggestion = { dictionary.add(it) },
+                onDelete = { dictionary.delete(it) },
+                modifier = Modifier.weight(1f)
+            )
         } else {
             Column(modifier = Modifier.weight(1f)) {
                 AnimatedVisibility(visible = showAddSnippet) {
@@ -351,6 +387,127 @@ fun HistoryCard(
             Text("As spoken", color = TextLow, style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.height(2.dp))
             Text(item.rawText, color = TextMid, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/**
+ * The dictionary: words RMBLR should stop guessing at.
+ *
+ * The list suggests itself. Nobody sits down and types out their own vocabulary, so
+ * anything already said more than once — or said once with a capital letter, which is
+ * usually a name — is offered as a chip to tap. Typing one in by hand is still there for
+ * the word you know it will get wrong before you have ever dictated it.
+ */
+@Composable
+private fun DictionaryTab(
+    words: List<DictionaryEntry>,
+    suggestions: List<String>,
+    newWord: String,
+    newSpelling: String,
+    onNewWord: (String) -> Unit,
+    onNewSpelling: (String) -> Unit,
+    onAdd: () -> Unit,
+    onAddSuggestion: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(Space.sm),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = Space.xxl),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        item {
+            Panel {
+                Text(
+                    "Names, places and jargon get guessed at, and differently every time. " +
+                        "Anything in here is handed to the transcriber before it hears you.",
+                    color = TextMid,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(Space.md))
+                SnippetField(newWord, onNewWord, "Word, e.g. Ntencane")
+                Spacer(Modifier.height(Space.sm))
+                SnippetField(newSpelling, onNewSpelling, "Spell it like this (optional)")
+                Spacer(Modifier.height(Space.md))
+                PrimaryAction(
+                    text = "Add word",
+                    enabled = newWord.isNotBlank(),
+                    onClick = onAdd
+                )
+            }
+        }
+
+        if (suggestions.isNotEmpty()) {
+            item {
+                Spacer(Modifier.height(Space.md))
+                Text(
+                    "From what you have dictated",
+                    color = TextLow,
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Spacer(Modifier.height(Space.sm))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                ) {
+                    suggestions.forEach { candidate ->
+                        Text(
+                            text = "+ $candidate",
+                            color = Accent,
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(Radius.control))
+                                .background(AccentWash)
+                                .clickable { onAddSuggestion(candidate) }
+                                .padding(horizontal = Space.md, vertical = Space.sm)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (words.isEmpty()) {
+            item {
+                Spacer(Modifier.height(Space.lg))
+                EmptyState(
+                    headline = "No words yet",
+                    body = "Add the names and terms that keep coming out wrong. Once you have " +
+                        "dictated a few times, suggestions appear above."
+                )
+            }
+        }
+
+        items(words, key = { it.id }) { entry ->
+            Panel(padding = androidx.compose.foundation.layout.PaddingValues(Space.lg)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = entry.word,
+                            color = TextHigh,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        if (entry.spelling.isNotBlank()) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = "written as ${entry.spelling}",
+                                color = TextMid,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                    IconButton(onClick = { onDelete(entry.id) }, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Remove",
+                            tint = TextLow,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

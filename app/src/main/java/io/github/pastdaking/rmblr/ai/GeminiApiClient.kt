@@ -86,7 +86,8 @@ object GeminiApiClient {
         preset: CleanupPreset = CleanupPreset.SMART_CLEAN,
         customPrompt: String? = null,
         instruction: String? = null,
-        languageHint: String? = null
+        languageHint: String? = null,
+        vocabulary: String? = null
     ): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             return@withContext Result.failure(
@@ -97,7 +98,7 @@ object GeminiApiClient {
         // Walk the fallback chain: the first model that actually answers wins.
         var lastError: Throwable? = null
         for (candidate in chainFor(model)) {
-            val attempt = attemptTranscribe(audioBytes, mimeType, apiKey, candidate, mode, preset, customPrompt, instruction, languageHint)
+            val attempt = attemptTranscribe(audioBytes, mimeType, apiKey, candidate, mode, preset, customPrompt, instruction, languageHint, vocabulary)
             attempt.onSuccess { return@withContext Result.success(it) }
             attempt.onFailure { lastError = it }
         }
@@ -115,7 +116,8 @@ object GeminiApiClient {
         preset: CleanupPreset,
         customPrompt: String?,
         instruction: String? = null,
-        languageHint: String? = null
+        languageHint: String? = null,
+        vocabulary: String? = null
     ): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
 
         try {
@@ -131,7 +133,7 @@ object GeminiApiClient {
             val transcriptionPrompt = if (mode == TranscriptionMode.DIRECT_VERBATIM) {
                 "Transcribe this audio file verbatim with accurate punctuation, numbers, and capitalization. " +
                     "Do not summarize or add conversational filler comments. Output ONLY the exact transcribed text. " +
-                    languageRule + SILENCE_RULE
+                    languageRule + vocabulary.orEmpty() + SILENCE_RULE
             } else {
                 // A tone is only ever a system prompt, so a custom one slots in here
                 // exactly where a built-in preset would.
@@ -140,7 +142,7 @@ object GeminiApiClient {
                     ?: preset.systemPrompt
                 "You are an expert speech recognition and language polish agent. Transcribe this audio recording into clean, fluid, well-punctuated text. " +
                     "$postInstruction Output ONLY the resulting text. " +
-                    languageRule + ASIDE_RULE + " " + SILENCE_RULE
+                    languageRule + vocabulary.orEmpty() + ASIDE_RULE + " " + SILENCE_RULE
             }
 
             val requestJson = JSONObject().apply {

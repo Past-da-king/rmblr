@@ -1,6 +1,7 @@
 package io.github.pastdaking.rmblr.ai
 
 import io.github.pastdaking.rmblr.audio.AudioRecorderManager
+import io.github.pastdaking.rmblr.data.DictionaryRepository
 import io.github.pastdaking.rmblr.data.PreferencesManager
 import io.github.pastdaking.rmblr.data.TranscriptionEngine
 import io.github.pastdaking.rmblr.data.TranscriptionMode
@@ -21,7 +22,8 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class DictationController(
     private val prefs: PreferencesManager,
-    private val recorder: AudioRecorderManager
+    private val recorder: AudioRecorderManager,
+    private val dictionary: DictionaryRepository? = null
 ) {
 
     private var session: LiveTranscriptionSession? = null
@@ -50,7 +52,8 @@ class DictationController(
                 LiveTranscriptionSession(
                     apiKey = apiKey,
                     model = engine.id,
-                    languageHint = language.code.takeIf { it.isNotBlank() }?.let { language.label }
+                    languageHint = language.code.takeIf { it.isNotBlank() }?.let { language.label },
+                    vocabulary = dictionary?.promptHint()
                 )
             }.getOrNull()
         } else {
@@ -107,7 +110,13 @@ class DictationController(
 
         // ---- Groq: transcribe there, then polish on Gemini if a tone was asked for ----
         if (engine == TranscriptionEngine.GROQ && groqKey.isNotBlank()) {
-            val heard = GroqApiClient.transcribe(wav, groqKey, engine.id, language.code)
+            val heard = GroqApiClient.transcribe(
+                wavBytes = wav,
+                apiKey = groqKey,
+                model = engine.id,
+                languageCode = language.code,
+                vocabulary = dictionary?.plainWordList()
+            )
             heard.onFailure { return Result.failure(it) }
             val raw = heard.getOrNull()?.trim().orEmpty()
             if (raw.isEmpty()) return Result.failure(IllegalStateException("Nothing was said."))
@@ -132,7 +141,8 @@ class DictationController(
             mode = if (instruction.isNullOrBlank()) TranscriptionMode.DIRECT_VERBATIM
                    else TranscriptionMode.POST_PROCESS_CLEANUP,
             instruction = instruction,
-            languageHint = language.label.takeIf { language.code.isNotBlank() }
+            languageHint = language.label.takeIf { language.code.isNotBlank() },
+            vocabulary = dictionary?.promptHint()
         )
     }
 

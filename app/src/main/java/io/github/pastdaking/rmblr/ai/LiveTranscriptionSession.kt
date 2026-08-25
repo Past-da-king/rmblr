@@ -48,7 +48,8 @@ import java.util.concurrent.TimeUnit
 class LiveTranscriptionSession(
     apiKey: String,
     model: String,
-    languageHint: String?
+    languageHint: String?,
+    vocabulary: String? = null
 ) {
 
     private val transcript = StringBuilder()
@@ -76,7 +77,7 @@ class LiveTranscriptionSession(
         socket = client.newWebSocket(request, object : WebSocketListener() {
 
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                webSocket.send(setupFrame(model, languageHint).toString())
+                webSocket.send(setupFrame(model, languageHint, vocabulary).toString())
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) = handle(webSocket, text)
@@ -230,13 +231,14 @@ class LiveTranscriptionSession(
         )
     ).toString()
 
-    private fun setupFrame(model: String, languageHint: String?): JSONObject {
+    private fun setupFrame(model: String, languageHint: String?, vocabulary: String?): JSONObject {
         val instruction = buildString {
             append("You are a transcription service. Transcribe the user's speech exactly. ")
             append("Never reply, never answer, never add commentary. ")
             if (!languageHint.isNullOrBlank()) {
                 append("The speaker is likely using $languageHint, possibly mixed with English in the same sentence. ")
             }
+            if (!vocabulary.isNullOrBlank()) append(vocabulary)
         }
 
         return JSONObject().put(

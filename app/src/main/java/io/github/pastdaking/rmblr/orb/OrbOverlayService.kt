@@ -55,6 +55,7 @@ import io.github.pastdaking.rmblr.audio.AudioRecorderManager
 import io.github.pastdaking.rmblr.data.CleanupPreset
 import io.github.pastdaking.rmblr.data.DictationHistoryItem
 import io.github.pastdaking.rmblr.data.HistoryRepository
+import io.github.pastdaking.rmblr.data.DictionaryRepository
 import io.github.pastdaking.rmblr.data.PreferencesManager
 import io.github.pastdaking.rmblr.data.languageFor
 import io.github.pastdaking.rmblr.data.TranscriptionMode
@@ -181,7 +182,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
         tones = ToneStore(this)
         history = HistoryRepository.getInstance(this)
         recorder = AudioRecorderManager(this)
-        dictation = DictationController(prefs, recorder)
+        dictation = DictationController(prefs, recorder, DictionaryRepository.getInstance(this))
         vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
 
         clipboard = (getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)?.also {
