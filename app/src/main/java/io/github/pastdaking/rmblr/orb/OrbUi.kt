@@ -8,6 +8,16 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -22,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -93,7 +104,9 @@ fun Orb(
     phase: OrbPhase,
     amplitude: Float,
     modifier: Modifier = Modifier,
-    size: Dp = ORB_SIZE
+    size: Dp = ORB_SIZE,
+    /** Show the globe instead of the wave: a tap will translate, not dictate. */
+    translate: Boolean = false
 ) {
     val ring by animateFloatAsState(
         targetValue = if (phase == OrbPhase.RECORDING) 1f + amplitude.coerceIn(0f, 1f) * 0.35f else 1f,
@@ -130,11 +143,22 @@ fun Orb(
                     tint = OnAccent,
                     level = amplitude
                 )
-                else -> WaveMark(
-                    size = size * 0.46f,
-                    tint = if (phase == OrbPhase.DONE) OnAccent else TextHigh,
-                    level = amplitude
-                )
+                else -> if (translate) {
+                    // The 文A glyph, which is what every translate button on a phone
+                    // looks like. A globe means "the internet", not "translate this".
+                    Icon(
+                        imageVector = Icons.Default.Translate,
+                        contentDescription = "Translate what you copied",
+                        tint = if (phase == OrbPhase.DONE) OnAccent else TextHigh,
+                        modifier = Modifier.size(size * 0.5f)
+                    )
+                } else {
+                    WaveMark(
+                        size = size * 0.46f,
+                        tint = if (phase == OrbPhase.DONE) OnAccent else TextHigh,
+                        level = amplitude
+                    )
+                }
             }
         }
     }
@@ -206,7 +230,7 @@ fun OrbFan(
 
     // Always a dark wash, whatever the theme. In light mode the scrim used to be the light
     // Ink, which dimmed nothing and left white chips floating unreadably over the keyboard.
-    BoxWithConstraints(modifier = modifier.fillMaxSize().background(Color(0xFF0A0B0D).copy(alpha = 0.55f))) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize().background(Ink.copy(alpha = 0.55f))) {
         val maxX = maxWidth - chipWidth - margin
         val maxY = maxHeight - chipHeight - margin
 
@@ -276,4 +300,95 @@ fun OrbToast(text: String, tint: Color = TextHigh, modifier: Modifier = Modifier
     ) {
         Text(text = text, color = tint, fontSize = 12.sp, maxLines = 2)
     }
+}
+
+/**
+ * The translation bubble.
+ *
+ * Deliberately a card floating over a scrim rather than a toast or a notification: you
+ * are reading a paragraph in a language you do not speak, so it has to sit still, be
+ * scrollable, and let you take the text with you. Tapping anywhere outside dismisses it,
+ * because the one thing worse than no translation is a translation you cannot get rid of.
+ */
+@Composable
+fun TranslationBubble(
+    text: String?,
+    error: String?,
+    working: Boolean,
+    targetLanguage: String,
+    onCopy: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .fillMaxSize()
+            .background(Ink.copy(alpha = 0.72f))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onDismiss
+            )
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(Surface)
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = {}   // swallow taps on the card itself
+                )
+                .padding(18.dp)
+        ) {
+            Text(
+                text = if (error != null) "Couldn't translate" else "In $targetLanguage",
+                color = if (error != null) Alert else TextMid,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+
+            Box(modifier = Modifier.height(10.dp))
+
+            when {
+                working -> Text("Translating…", color = TextMid, fontSize = 15.sp)
+                error != null -> Text(error, color = TextHigh, fontSize = 15.sp)
+                else -> Text(
+                    text = text.orEmpty(),
+                    color = TextHigh,
+                    fontSize = 16.sp,
+                    modifier = Modifier
+                        .heightIn(max = 340.dp)
+                        .verticalScroll(rememberScrollState())
+                )
+            }
+
+            if (!working && error == null && !text.isNullOrBlank()) {
+                Box(modifier = Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                    BubbleAction("Copy", onCopy)
+                    Box(modifier = Modifier.width(8.dp))
+                    BubbleAction("Close", onDismiss)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BubbleAction(label: String, onClick: () -> Unit) {
+    Text(
+        text = label,
+        color = Accent,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Medium,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    )
 }

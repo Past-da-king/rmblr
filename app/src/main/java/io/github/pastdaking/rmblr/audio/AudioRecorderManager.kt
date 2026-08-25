@@ -44,8 +44,16 @@ class AudioRecorderManager(private val context: Context) {
     private var speechRecognizer: SpeechRecognizer? = null
     private val audioBuffer = ByteArrayOutputStream()
 
+    /**
+     * @param onPcmChunk called on the recording thread with every buffer of microphone
+     *        audio as it is read, so a streaming engine can put it on the wire while the
+     *        user is still speaking rather than waiting for the whole clip. The array is
+     *        reused between reads, so copy anything you intend to keep. The full
+     *        recording is still buffered either way, because the batch engines need it
+     *        and because it is the fallback if a stream dies mid-sentence.
+     */
     @SuppressLint("MissingPermission")
-    fun startRecording(onLiveSpeechText: ((String) -> Unit)? = null) {
+    fun startRecording(onPcmChunk: ((ByteArray, Int) -> Unit)? = null) {
         if (_isRecording.value) return
 
         val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
@@ -81,6 +89,11 @@ class AudioRecorderManager(private val context: Context) {
                             audioBuffer.write(tempBuffer, 0, bytesRead)
                         }
 
+                        // Straight onto the wire, before anything else is done with it.
+                        // A streaming engine's whole advantage is that this happens now
+                        // and not after the user lets go.
+                        onPcmChunk?.invoke(tempBuffer, bytesRead)
+
                         // Calculate RMS amplitude for real-time waveform
                         var sum = 0.0
                         val shortCount = bytesRead / 2
@@ -97,9 +110,6 @@ class AudioRecorderManager(private val context: Context) {
                 }
             }
 
-            // Optional live speech recognition support for instant visual feedback
-            if (SpeechRecognizer.isRecognitionAvailable(context)) {
-            }
         } catch (e: Exception) {
             Log.e("AudioRecorder", "Error starting recording", e)
             _isRecording.value = false

@@ -32,6 +32,32 @@ object OrbState {
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    /**
+     * When something was last copied, or 0 if nothing has been.
+     *
+     * The orb has no business sitting on screen all day. It earns its place for a minute
+     * after you copy something, and then it goes away again. Two things set this: the
+     * clipboard listener in the overlay service, and the accessibility service noticing
+     * you select text — between them they catch a copy from a browser, a chat app or the
+     * selection toolbar without RMBLR ever reading the clipboard in the background.
+     */
+    private val _copiedAt = MutableStateFlow(0L)
+    val copiedAt: StateFlow<Long> = _copiedAt.asStateFlow()
+
+    fun markCopied() {
+        _copiedAt.value = System.currentTimeMillis()
+    }
+
+    fun clearCopied() {
+        _copiedAt.value = 0L
+    }
+
+    /** True for [windowMs] after a copy, and false the rest of the time. */
+    fun copiedRecently(windowMs: Long): Boolean {
+        val at = _copiedAt.value
+        return at > 0L && System.currentTimeMillis() - at < windowMs
+    }
+
     /** Package of whatever you are typing in, so the orb can offer the right actions. */
     private val _currentPackage = MutableStateFlow<String?>(null)
     val currentPackage: StateFlow<String?> = _currentPackage.asStateFlow()

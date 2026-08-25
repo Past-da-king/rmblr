@@ -18,6 +18,27 @@ class PreferencesManager private constructor(context: Context) {
     private val _modelFlow = MutableStateFlow(getSelectedModel())
     val modelFlow: StateFlow<String> = _modelFlow.asStateFlow()
 
+    private val _engineFlow = MutableStateFlow(getEngine())
+    val engineFlow: StateFlow<TranscriptionEngine> = _engineFlow.asStateFlow()
+
+    private val _groqKeyFlow = MutableStateFlow(getGroqApiKey())
+    val groqKeyFlow: StateFlow<String> = _groqKeyFlow.asStateFlow()
+
+    private val _languageFlow = MutableStateFlow(getLanguageCode())
+    val languageFlow: StateFlow<String> = _languageFlow.asStateFlow()
+
+    private val _translateEnabledFlow = MutableStateFlow(isTranslateEnabled())
+    val translateEnabledFlow: StateFlow<Boolean> = _translateEnabledFlow.asStateFlow()
+
+    private val _translateTargetFlow = MutableStateFlow(getTranslateTargetCode())
+    val translateTargetFlow: StateFlow<String> = _translateTargetFlow.asStateFlow()
+
+    private val _textProviderFlow = MutableStateFlow(getTextProvider())
+    val textProviderFlow: StateFlow<TextProvider> = _textProviderFlow.asStateFlow()
+
+    private val _textKeyFlow = MutableStateFlow(getTextApiKey())
+    val textKeyFlow: StateFlow<String> = _textKeyFlow.asStateFlow()
+
     private val _transcriptionModeFlow = MutableStateFlow(getTranscriptionMode())
     val transcriptionModeFlow: StateFlow<TranscriptionMode> = _transcriptionModeFlow.asStateFlow()
 
@@ -49,13 +70,47 @@ class PreferencesManager private constructor(context: Context) {
         }
     }
 
-    fun getSelectedModel(): String {
-        return prefs.getString("gemini_model", "gemini-3.1-flash-live-preview") ?: "gemini-3.1-flash-live-preview"
-    }
+    fun getSelectedModel(): String = getEngine().id
 
     fun setSelectedModel(model: String) {
-        prefs.edit().putString("gemini_model", model).apply()
-        _modelFlow.value = model
+        setEngine(TranscriptionEngine.from(model))
+    }
+
+    // ---- engine ---------------------------------------------------------
+    //
+    // Which thing actually does the listening. This replaced a plain model-id string:
+    // Groq is not a Gemini model, and "streams while you talk" is a property of the
+    // engine rather than of the name, so the choice needs somewhere richer to live.
+
+    fun getEngine(): TranscriptionEngine =
+        TranscriptionEngine.from(prefs.getString("engine", null) ?: prefs.getString("gemini_model", null))
+
+    fun setEngine(engine: TranscriptionEngine) {
+        prefs.edit().putString("engine", engine.name).apply()
+        _engineFlow.value = engine
+        _modelFlow.value = engine.id
+    }
+
+    // ---- Groq key -------------------------------------------------------
+
+    fun getGroqApiKey(): String = prefs.getString("groq_api_key", "") ?: ""
+
+    fun setGroqApiKey(key: String) {
+        prefs.edit().putString("groq_api_key", key.trim()).apply()
+        _groqKeyFlow.value = key.trim()
+    }
+
+    // ---- spoken language ------------------------------------------------
+    //
+    // Blank means "work it out", which is the default and what almost everyone should
+    // leave it on. Naming a language only helps when you know the transcriber is
+    // guessing wrong.
+
+    fun getLanguageCode(): String = prefs.getString("language_code", "") ?: ""
+
+    fun setLanguageCode(code: String) {
+        prefs.edit().putString("language_code", code).apply()
+        _languageFlow.value = code
     }
 
     fun getTranscriptionMode(): TranscriptionMode {
@@ -93,6 +148,67 @@ class PreferencesManager private constructor(context: Context) {
     fun setCustomPrompt(prompt: String) {
         prefs.edit().putString("custom_prompt", prompt).apply()
         _customPromptFlow.value = prompt
+    }
+
+    // ---- translation ----------------------------------------------------
+    //
+    // Off until it is switched on, and it says why on the switch. Reading the clipboard
+    // is the kind of permission people are right to be suspicious of, so nothing here
+    // happens to anyone who did not ask for it.
+
+    fun isTranslateEnabled(): Boolean = prefs.getBoolean("translate_enabled", false)
+
+    fun setTranslateEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("translate_enabled", enabled).apply()
+        _translateEnabledFlow.value = enabled
+    }
+
+    fun getTranslateTargetCode(): String = prefs.getString("translate_target", "en") ?: "en"
+
+    fun setTranslateTargetCode(code: String) {
+        prefs.edit().putString("translate_target", code).apply()
+        _translateTargetFlow.value = code
+    }
+
+    // ---- text provider --------------------------------------------------
+
+    fun getTextProvider(): TextProvider = TextProvider.from(prefs.getString("text_provider", null))
+
+    fun setTextProvider(provider: TextProvider) {
+        prefs.edit().putString("text_provider", provider.name).apply()
+        _textProviderFlow.value = provider
+    }
+
+    fun getTextApiKey(): String {
+        val provider = getTextProvider()
+        return if (provider.usesGeminiKey) getEffectiveApiKey()
+        else prefs.getString("text_key_${provider.name}", "") ?: ""
+    }
+
+    fun setTextApiKey(key: String) {
+        prefs.edit().putString("text_key_${getTextProvider().name}", key.trim()).apply()
+        _textKeyFlow.value = key.trim()
+    }
+
+    /** Blank falls back to the provider's own, so only CUSTOM ever needs typing into. */
+    fun getTextBaseUrl(): String {
+        val provider = getTextProvider()
+        val stored = prefs.getString("text_base_${provider.name}", "") ?: ""
+        return stored.ifBlank { provider.baseUrl }
+    }
+
+    fun setTextBaseUrl(url: String) {
+        prefs.edit().putString("text_base_${getTextProvider().name}", url.trim()).apply()
+    }
+
+    fun getTextModel(): String {
+        val provider = getTextProvider()
+        val stored = prefs.getString("text_model_${provider.name}", "") ?: ""
+        return stored.ifBlank { provider.defaultModel }
+    }
+
+    fun setTextModel(model: String) {
+        prefs.edit().putString("text_model_${getTextProvider().name}", model.trim()).apply()
     }
 
     fun isHapticEnabled(): Boolean = prefs.getBoolean("haptic_feedback", true)

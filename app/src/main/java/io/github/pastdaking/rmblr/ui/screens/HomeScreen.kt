@@ -57,8 +57,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import io.github.pastdaking.rmblr.ai.GeminiApiClient
+import io.github.pastdaking.rmblr.ai.DictationController
 import io.github.pastdaking.rmblr.audio.AudioRecorderManager
+import io.github.pastdaking.rmblr.data.CleanupPreset
 import io.github.pastdaking.rmblr.data.DictationHistoryItem
 import io.github.pastdaking.rmblr.data.HistoryRepository
 import io.github.pastdaking.rmblr.data.PreferencesManager
@@ -114,8 +115,12 @@ fun HomeScreen(
     val clipboard = LocalClipboardManager.current
 
     val recorder = remember { AudioRecorderManager(context) }
+    val dictation = remember { DictationController(prefsManager, recorder) }
     val isRecording by recorder.isRecording.collectAsState()
     val amplitude by recorder.audioAmplitude.collectAsState()
+    // Only ever non-empty on a streaming engine, which is the point: on Gemini Live you
+    // watch the sentence appear as you say it.
+    val heardSoFar by dictation.liveText.collectAsState()
 
     val currentMode by prefsManager.transcriptionModeFlow.collectAsState()
     val currentPreset by prefsManager.presetFlow.collectAsState()
@@ -348,30 +353,16 @@ fun HomeScreen(
                         if (isRecording) {
                             working = true
                             status = "Transcribing"
-                            val wav = recorder.stopRecording()
-                            val live = recorder.getLiveTranscript()
                             scope.launch {
-                                val key = prefsManager.getEffectiveApiKey()
-                                val model = prefsManager.getSelectedModel()
-                                val custom = prefsManager.getCustomPrompt()
-                                val result = withContext(Dispatchers.IO) {
-                                    if (wav.size > 200) {
-                                        GeminiApiClient.transcribeAudio(
-                                            audioBytes = wav,
-                                            mimeType = "audio/wav",
-                                            apiKey = key,
-                                            model = model,
-                                            mode = currentMode,
-                                            preset = currentPreset,
-                                            customPrompt = custom
-                                        )
-                                    } else if (live.isNotBlank()) {
-                                        GeminiApiClient.postProcessText(live, key, model, currentPreset, custom)
-                                            .map { live to it }
-                                    } else {
-                                        Result.failure(Exception("Nothing recorded. Try again."))
-                                    }
+                                // Verbatim means no rewriting call at all. Anything else
+                                // hands the tone's own prompt down, custom included.
+                                val instruction = when {
+                                    currentMode == TranscriptionMode.DIRECT_VERBATIM -> null
+                                    currentPreset == CleanupPreset.CUSTOM ->
+                                        prefsManager.getCustomPrompt().takeIf { it.isNotBlank() }
+                                    else -> currentPreset.systemPrompt
                                 }
+                                val result = withContext(Dispatchers.IO) { dictation.finish(instruction) }
                                 working = false
                                 result.onSuccess { (raw, cleaned) ->
                                     transcript = cleaned
@@ -389,7 +380,7 @@ fun HomeScreen(
                         } else {
                             transcript = null
                             status = null
-                            recorder.startRecording()
+                            dictation.begin()
                         }
                     }
                 )
@@ -408,11 +399,13 @@ fun HomeScreen(
             Text(
                 text = when {
                     working -> status ?: "Transcribing"
+                    isRecording && heardSoFar.isNotBlank() -> heardSoFar
                     isRecording -> "Listening. Tap again when you're done."
                     status != null -> status!!
                     else -> "Tap and speak."
                 },
                 color = when {
+                    isRecording && heardSoFar.isNotBlank() -> TextHigh
                     isRecording -> Alert
                     working -> Accent
                     status != null -> Alert

@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -47,12 +49,14 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.pastdaking.rmblr.MainActivity
 import io.github.pastdaking.rmblr.R
-import io.github.pastdaking.rmblr.ai.GeminiApiClient
+import io.github.pastdaking.rmblr.ai.DictationController
+import io.github.pastdaking.rmblr.ai.Translator
 import io.github.pastdaking.rmblr.audio.AudioRecorderManager
 import io.github.pastdaking.rmblr.data.CleanupPreset
 import io.github.pastdaking.rmblr.data.DictationHistoryItem
 import io.github.pastdaking.rmblr.data.HistoryRepository
 import io.github.pastdaking.rmblr.data.PreferencesManager
+import io.github.pastdaking.rmblr.data.languageFor
 import io.github.pastdaking.rmblr.data.TranscriptionMode
 import io.github.pastdaking.rmblr.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.CoroutineScope
@@ -91,6 +95,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     private lateinit var tones: ToneStore
     private lateinit var history: HistoryRepository
     private lateinit var recorder: AudioRecorderManager
+    private lateinit var dictation: DictationController
     private var vibrator: Vibrator? = null
 
     private var windowManager: WindowManager? = null
@@ -120,11 +125,40 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     private var longPress: Runnable? = null
     private var activeTone: Tone? = null
 
+    // Translation. The orb wears a globe when there is no text field to dictate into but
+    // translating whatever is on the clipboard is still useful.
+    private var translateMode by mutableStateOf(false)
+    private var bubbleOpen by mutableStateOf(false)
+    private var bubbleWorking by mutableStateOf(false)
+    private var bubbleText by mutableStateOf<String?>(null)
+    private var bubbleError by mutableStateOf<String?>(null)
+
+    /**
+     * The clipboard's own change notification. This is the signal that puts the orb on
+     * screen, and the reason it is no longer sitting there permanently: no copy, no orb.
+     * It only says THAT something changed, never what — reading the text still waits for
+     * a deliberate tap.
+     */
+    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
+        // Ignore our own writes. Pasting a dictation and copying a translation both go
+        // through the clipboard, and neither should make the orb offer to translate the
+        // thing it just produced. The label is readable in the background; the text is
+        // not, which is exactly the split we want.
+        val ours = runCatching {
+            clipboard?.primaryClipDescription?.label?.toString()?.startsWith("RMBLR") == true
+        }.getOrDefault(false)
+        if (!ours && prefs.isTranslateEnabled()) OrbState.markCopied()
+    }
+    private var clipboard: ClipboardManager? = null
+
 
 
 
     companion object {
         private const val TAG = "RmblrOrb"
+
+        /** How long after a copy the orb stays offered before it gets out of the way. */
+        private const val ARM_WINDOW_MS = 60_000L
 
 
 
@@ -147,7 +181,12 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
         tones = ToneStore(this)
         history = HistoryRepository.getInstance(this)
         recorder = AudioRecorderManager(this)
+        dictation = DictationController(prefs, recorder)
         vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+
+        clipboard = (getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)?.also {
+            runCatching { it.addPrimaryClipChangedListener(clipListener) }
+        }
 
         startForegroundNotification()
         addOverlay()
@@ -155,6 +194,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     }
 
     override fun onDestroy() {
+        runCatching { clipboard?.removePrimaryClipChangedListener(clipListener) }
         handler.removeCallbacksAndMessages(null)
         runCatching { rootView?.let { windowManager?.removeView(it) } }
         rootView = null
@@ -199,7 +239,10 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
             setContent { OrbContent() }
         }
 
-        view.setOnTouchListener { _, event -> onTouch(event) }
+        // While the bubble is up its own buttons need the touches, so the gesture layer
+        // stands down. It consumes everything the rest of the time, which is why the fan
+        // is driven from here rather than from Compose clickables.
+        view.setOnTouchListener { _, event -> if (bubbleOpen) false else onTouch(event) }
 
         rootView = view
         runCatching { windowManager?.addView(view, params) }
@@ -216,7 +259,17 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     private fun watchVisibility() {
         scope.launch {
             while (true) {
-                val show = OrbState.shouldBeVisible() && prefs.isFloatingAssistantEnabled()
+                // Only and only if something was just copied. An orb that is always on
+                // screen is in the way; one that appears the moment you copy something,
+                // and leaves a minute later, is a feature.
+                val justCopied = prefs.isTranslateEnabled() && OrbState.copiedRecently(ARM_WINDOW_MS)
+
+                val show = (OrbState.shouldBeVisible() || justCopied) &&
+                    prefs.isFloatingAssistantEnabled()
+
+                translateMode = justCopied &&
+                    !OrbState.inputFocused.value &&
+                    OrbState.phase.value == OrbPhase.IDLE
 
                 // The home screen writes size and placement straight to prefs, so pick
                 // up any change here rather than making the operator restart the orb.
@@ -309,8 +362,11 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                     }
                 } else {
                     haptic(12)
-                    if (OrbState.phase.value == OrbPhase.RECORDING) finishDictation()
-                    else beginDictation(tones.byId(activeProfile().tap))
+                    when {
+                        OrbState.phase.value == OrbPhase.RECORDING -> finishDictation()
+                        translateMode -> translateClipboard()
+                        else -> beginDictation(tones.byId(activeProfile().tap))
+                    }
                 }
                 dragging = false
             }
@@ -373,6 +429,11 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
             .map { tones.byId(it) }
 
         menuOpen = true
+        expandWindow()
+    }
+
+    /** Take the whole screen, so a fan or a bubble has somewhere to be drawn. */
+    private fun expandWindow() {
         params.width = WindowManager.LayoutParams.MATCH_PARENT
         params.height = WindowManager.LayoutParams.MATCH_PARENT
         params.x = 0
@@ -383,6 +444,10 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     private fun closeMenu() {
         menuOpen = false
         highlighted = -1
+        collapseWindow()
+    }
+
+    private fun collapseWindow() {
         params.width = WindowManager.LayoutParams.WRAP_CONTENT
         params.height = WindowManager.LayoutParams.WRAP_CONTENT
         applyOrbPosition()
@@ -409,7 +474,16 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
             val amplitude by recorder.audioAmplitude.collectAsState()
             val density = resources.displayMetrics.density
 
-            if (menuOpen) {
+            if (bubbleOpen) {
+                TranslationBubble(
+                    text = bubbleText,
+                    error = bubbleError,
+                    working = bubbleWorking,
+                    targetLanguage = languageFor(prefs.getTranslateTargetCode()).label,
+                    onCopy = { copyBubble() },
+                    onDismiss = { dismissBubble() }
+                )
+            } else if (menuOpen) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     OrbFan(
                         centre = DpOffset(
@@ -431,18 +505,103 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                     )
                 }
             } else {
-                Orb(phase = phase, amplitude = amplitude, size = orbSize)
+                Orb(
+                    phase = phase,
+                    amplitude = amplitude,
+                    size = orbSize,
+                    translate = translateMode
+                )
             }
         }
+    }
+
+    // ---------------------------------------------------------------- translation
+
+    /**
+     * Read whatever is on the clipboard and show it in the target language.
+     *
+     * The awkward part is Android, not the model. Since Android 10 an app cannot read
+     * the clipboard unless it holds input focus, and an overlay deliberately does not
+     * take focus — if it did, it would steal the cursor out of whatever you were typing
+     * in. So focus is borrowed for a moment, on an explicit tap, and handed straight
+     * back. Nothing is read in the background and nothing is read unless you asked.
+     */
+    private fun translateClipboard() {
+        bubbleText = null
+        bubbleError = null
+        bubbleWorking = true
+        bubbleOpen = true
+        expandWindow()
+        haptic(14)
+
+        readClipboardWithFocus { copied ->
+            if (copied.isNullOrBlank()) {
+                bubbleWorking = false
+                bubbleError = "Nothing on the clipboard. Copy some text, then tap the orb."
+                return@readClipboardWithFocus
+            }
+            scope.launch {
+                val result = withContext(Dispatchers.IO) { Translator.translate(copied, prefs) }
+                bubbleWorking = false
+                result
+                    .onSuccess { bubbleText = it }
+                    .onFailure { bubbleError = it.message ?: "Could not translate that." }
+            }
+        }
+    }
+
+    private fun readClipboardWithFocus(then: (String?) -> Unit) {
+        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+        runCatching { windowManager?.updateViewLayout(rootView, params) }
+
+        // The window manager needs a beat to actually hand focus over; reading in the
+        // same frame reliably comes back null.
+        handler.postDelayed({
+            val copied = runCatching {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.primaryClip
+                    ?.takeIf { it.itemCount > 0 }
+                    ?.getItemAt(0)
+                    ?.coerceToText(this)
+                    ?.toString()
+            }.getOrNull()
+
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            runCatching { windowManager?.updateViewLayout(rootView, params) }
+            then(copied)
+        }, 160)
+    }
+
+    private fun copyBubble() {
+        val text = bubbleText ?: return
+        runCatching {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("RMBLR translation", text))
+        }
+        haptic(18)
+        dismissBubble()
+    }
+
+    private fun dismissBubble() {
+        // Done with that copy: the orb has no reason to stay on screen.
+        OrbState.clearCopied()
+        translateMode = false
+        bubbleOpen = false
+        bubbleWorking = false
+        bubbleText = null
+        bubbleError = null
+        collapseWindow()
     }
 
     // ---------------------------------------------------------------- dictation
 
     private fun beginDictation(tone: Tone?) {
-        activeTone = tone
+        // A tone the current engine cannot honour is dropped here rather than silently
+        // ignored later, so what happens matches what Settings said would happen.
+        activeTone = tone?.takeIf { prefs.getEngine().supportsTone }
         OrbState.setPhase(OrbPhase.RECORDING)
         haptic(20)
-        recorder.startRecording()
+        dictation.begin()
     }
 
     private fun finishDictation() {
@@ -450,35 +609,11 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
         OrbState.setPhase(OrbPhase.WORKING)
         haptic(14)
 
-        val wav = recorder.stopRecording()
-        val live = recorder.getLiveTranscript()
-
         scope.launch {
-            val apiKey = prefs.getEffectiveApiKey()
-            val model = prefs.getSelectedModel()
-            val custom = prefs.getCustomPrompt()
-
-            val result = withContext(Dispatchers.IO) {
-                if (wav.size > 200) {
-                    GeminiApiClient.transcribeAudio(
-                        audioBytes = wav,
-                        mimeType = "audio/wav",
-                        apiKey = apiKey,
-                        model = model,
-                        mode = if (tone == null) TranscriptionMode.DIRECT_VERBATIM
-                               else TranscriptionMode.POST_PROCESS_CLEANUP,
-                        preset = CleanupPreset.SMART_CLEAN,
-                        customPrompt = custom,
-                        instruction = tone?.prompt
-                    )
-                } else if (live.isNotBlank()) {
-                    if (tone == null) Result.success(live to live)
-                    else GeminiApiClient.postProcessText(live, apiKey, model, CleanupPreset.CUSTOM, tone.prompt)
-                        .map { live to it }
-                } else {
-                    Result.failure(Exception("Nothing recorded"))
-                }
-            }
+            // A plain tap asks for no tone, which means no rewriting call at all: the
+            // words go straight into the field instead of taking a detour through a
+            // second model first.
+            val result = withContext(Dispatchers.IO) { dictation.finish(tone?.prompt) }
 
             result.onSuccess { (raw, cleaned) ->
                 // Said nothing: do nothing. No paste, no error, no history entry.

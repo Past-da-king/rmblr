@@ -23,6 +23,21 @@ class FieldWatcherService : AccessibilityService() {
             private set
 
         fun isRunning(): Boolean = instance != null
+
+        /**
+         * Labels on the text-selection toolbar that mean "this went to the clipboard".
+         *
+         * A backstop, not the main signal. Android will not deliver a clipboard change
+         * to an app that is not in front, so on some versions the overlay's own listener
+         * stays silent and this is what notices instead. Matching on a label is
+         * unavoidably language-bound, which is why selecting text arms the orb too — the
+         * two together cover the cases either one misses.
+         */
+        private val COPY_LABELS = setOf(
+            "copy", "cut", "copy text", "copy link", "copy link address",
+            "kopieer", "copier", "kopieren", "kopiëren", "copiar", "copia",
+            "kopiraj", "kopiuj", "копировать", "복사", "コピー", "复制", "نسخ"
+        )
     }
 
     override fun onServiceConnected() {
@@ -51,8 +66,39 @@ class FieldWatcherService : AccessibilityService() {
                 // Knowing the app is free here and it is what per-app profiles run on.
                 OrbState.setCurrentPackage(event.packageName?.toString())
                 OrbState.setInputFocused(currentFieldIsEditable())
+                noticeCopy(event)
             }
         }
+    }
+
+    /**
+     * Spot the moment text goes to the clipboard, so the orb can appear then and only
+     * then. Nothing here reads the clipboard — it only decides whether to offer.
+     */
+    private fun noticeCopy(event: AccessibilityEvent) {
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> {
+                // A real selection in something you are reading rather than writing. A
+                // caret moving in a text box is also a "selection change" and must not
+                // count, or the orb would appear every time you tapped mid-sentence.
+                val selected = event.toIndex - event.fromIndex
+                if (selected > 0 && !sourceIsEditable(event)) OrbState.markCopied()
+            }
+
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                val label = (event.text.joinToString(" ").ifBlank {
+                    event.contentDescription?.toString().orEmpty()
+                }).trim().lowercase()
+                if (label.isNotEmpty() && label in COPY_LABELS) OrbState.markCopied()
+            }
+        }
+    }
+
+    private fun sourceIsEditable(event: AccessibilityEvent): Boolean {
+        val node = runCatching { event.source }.getOrNull() ?: return false
+        val editable = node.isEditable || node.className?.contains("EditText") == true
+        node.recycle()
+        return editable
     }
 
     private fun currentFieldIsEditable(): Boolean {

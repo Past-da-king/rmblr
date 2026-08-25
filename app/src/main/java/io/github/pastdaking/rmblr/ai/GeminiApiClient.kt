@@ -29,24 +29,47 @@ object GeminiApiClient {
             "respond with absolutely nothing: an empty response. Never explain, never apologise, " +
             "never say you could not hear anything."
 
+    /**
+     * Instructions the speaker says out loud, to you, in the middle of dictating.
+     *
+     * This is the single most annoying thing the app got wrong. Mid-sentence you turn
+     * and address the transcriber — "hey this is for you, spell it like this" — and it
+     * dutifully types out the aside word for word, which is precisely the opposite of
+     * what you asked for. Those sentences are commands, not content.
+     */
+    private const val ASIDE_RULE =
+        "The speaker sometimes stops dictating and speaks TO you instead: \"hey, this one is for you\", " +
+            "\"spell that D-E-B-U-G\", \"scratch that last bit\", \"actually make this a bullet list\", " +
+            "\"no wait, say it like this instead\", \"new paragraph\". Those sentences are INSTRUCTIONS " +
+            "addressed to you, not words to be typed. Carry each one out on the surrounding text, then " +
+            "remove it completely from your output. Never transcribe an instruction that was aimed at you. " +
+            "Where a later instruction contradicts something said earlier, the later one wins. " +
+            "Everything the speaker was actually dictating must survive untouched."
+
     /** Live models cannot rewrite text, so the cleanup pass always runs on this one. */
-    private const val POLISH_MODEL = "gemini-3.5-flash"
+    private const val POLISH_MODEL = "gemini-3.1-flash-lite"
 
     /**
      * If the chosen model is out of quota or having a moment, drop down the list rather
-     * than losing the dictation. Flash Live first because it has the most headroom, is
-     * the fastest, and is the only one that handles isiZulu properly; then a solid text
-     * model; then the cheapest, which will at least get the words down.
+     * than losing the dictation.
+     *
+     * Flash Lite leads because it is genuinely good at plain transcription for a
+     * fraction of the price, and transcription is not the part that needs a big model.
+     * Flash sits behind it for the days Lite is rate limited. Live models are absent on
+     * purpose: they have no REST endpoint at all and are handled by
+     * [LiveTranscriptionSession] over a socket instead.
      */
     private val FALLBACKS = listOf(
-        "gemini-3.1-flash-live-preview",
-        "gemini-3.5-flash",
-        "gemini-3.1-flash-lite"
+        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash"
     )
 
     /** The chosen model, then anything else worth trying, without repeats. */
     private fun chainFor(model: String): List<String> =
-        (listOf(model) + FALLBACKS).distinct()
+        (listOf(model) + FALLBACKS)
+            .filterNot { LiveTranscriptionSession.isLiveModel(it) }
+            .distinct()
+            .ifEmpty { FALLBACKS }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -58,11 +81,12 @@ object GeminiApiClient {
         audioBytes: ByteArray,
         mimeType: String = "audio/wav",
         apiKey: String,
-        model: String = "gemini-3.1-flash-live-preview",
+        model: String = POLISH_MODEL,
         mode: TranscriptionMode = TranscriptionMode.POST_PROCESS_CLEANUP,
         preset: CleanupPreset = CleanupPreset.SMART_CLEAN,
         customPrompt: String? = null,
-        instruction: String? = null
+        instruction: String? = null,
+        languageHint: String? = null
     ): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             return@withContext Result.failure(
@@ -73,7 +97,7 @@ object GeminiApiClient {
         // Walk the fallback chain: the first model that actually answers wins.
         var lastError: Throwable? = null
         for (candidate in chainFor(model)) {
-            val attempt = attemptTranscribe(audioBytes, mimeType, apiKey, candidate, mode, preset, customPrompt, instruction)
+            val attempt = attemptTranscribe(audioBytes, mimeType, apiKey, candidate, mode, preset, customPrompt, instruction, languageHint)
             attempt.onSuccess { return@withContext Result.success(it) }
             attempt.onFailure { lastError = it }
         }
@@ -90,34 +114,24 @@ object GeminiApiClient {
         mode: TranscriptionMode,
         preset: CleanupPreset,
         customPrompt: String?,
-        instruction: String? = null
+        instruction: String? = null,
+        languageHint: String? = null
     ): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
-
-        // The Live models transcribe multilingual speech far better than anything on the
-        // REST endpoint, but they only exist on the WebSocket. Route them there, then do
-        // the polish pass with a text model, since a Live model cannot do that step.
-        if (GeminiLiveClient.isLiveModel(model)) {
-            val heard = GeminiLiveClient.transcribe(audioBytes, apiKey, model)
-            heard.onFailure { return@withContext Result.failure(it) }
-            val raw = heard.getOrNull().orEmpty()
-            if (raw.isBlank()) {
-                return@withContext Result.failure(IllegalStateException("Nothing was said."))
-            }
-            if (mode == TranscriptionMode.DIRECT_VERBATIM) {
-                return@withContext Result.success(raw to raw)
-            }
-            val polished = postProcessText(raw, apiKey, POLISH_MODEL, preset, instruction ?: customPrompt)
-            return@withContext Result.success(raw to (polished.getOrNull() ?: raw))
-        }
 
         try {
             val audioBase64 = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
+
+            // A named language is a hint, never a constraint: the speaker may well drop
+            // into English for half a sentence, and that has to keep working.
+            val languageRule = if (languageHint.isNullOrBlank()) "" else
+                "The speaker is likely using $languageHint, possibly mixed with English in the same sentence. " +
+                    "Transcribe each word in whatever language it was actually spoken in. "
 
             // Step 1: Direct Verbatim transcription instruction
             val transcriptionPrompt = if (mode == TranscriptionMode.DIRECT_VERBATIM) {
                 "Transcribe this audio file verbatim with accurate punctuation, numbers, and capitalization. " +
                     "Do not summarize or add conversational filler comments. Output ONLY the exact transcribed text. " +
-                    SILENCE_RULE
+                    languageRule + SILENCE_RULE
             } else {
                 // A tone is only ever a system prompt, so a custom one slots in here
                 // exactly where a built-in preset would.
@@ -125,7 +139,8 @@ object GeminiApiClient {
                     ?: customPrompt.takeIf { preset == CleanupPreset.CUSTOM && !it.isNullOrBlank() }
                     ?: preset.systemPrompt
                 "You are an expert speech recognition and language polish agent. Transcribe this audio recording into clean, fluid, well-punctuated text. " +
-                    "$postInstruction Output ONLY the resulting text. " + SILENCE_RULE
+                    "$postInstruction Output ONLY the resulting text. " +
+                    languageRule + ASIDE_RULE + " " + SILENCE_RULE
             }
 
             val requestJson = JSONObject().apply {
@@ -196,7 +211,7 @@ object GeminiApiClient {
     suspend fun postProcessText(
         inputText: String,
         apiKey: String,
-        model: String = "gemini-3.1-flash-live-preview",
+        model: String = POLISH_MODEL,
         preset: CleanupPreset = CleanupPreset.SMART_CLEAN,
         customPrompt: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
@@ -208,6 +223,10 @@ object GeminiApiClient {
         if (inputText.isBlank()) {
             return@withContext Result.success("")
         }
+
+        // A live model has no REST endpoint, so anything pointed here gets quietly
+        // redirected to the model that can actually rewrite text.
+        val polishModel = if (LiveTranscriptionSession.isLiveModel(model)) POLISH_MODEL else model
 
         try {
             val instructions = if (preset == CleanupPreset.CUSTOM && !customPrompt.isNullOrBlank()) {
@@ -229,7 +248,9 @@ object GeminiApiClient {
                     
                     Instruction:
                     $instructions
-                    
+
+                    $ASIDE_RULE
+
                     Important: Output ONLY the polished resulting text. No quotes, no markdown backticks, no explanations.
                 """.trimIndent()
 
@@ -248,7 +269,7 @@ object GeminiApiClient {
 
             val mediaType = "application/json; charset=utf-8".toMediaType()
             val body = requestJson.toString().toRequestBody(mediaType)
-            val url = "$BASE_URL/$model:generateContent?key=$apiKey"
+            val url = "$BASE_URL/$polishModel:generateContent?key=$apiKey"
 
             val request = Request.Builder()
                 .url(url)
@@ -273,7 +294,7 @@ object GeminiApiClient {
     suspend fun testConnection(apiKey: String, requestedModel: String = "gemini-3.5-flash"): Result<String> = withContext(Dispatchers.IO) {
         // A Live model has no REST endpoint to ping, so test the key against the text
         // model instead: the key is what we are actually checking.
-        val model = if (GeminiLiveClient.isLiveModel(requestedModel)) POLISH_MODEL else requestedModel
+        val model = if (LiveTranscriptionSession.isLiveModel(requestedModel)) POLISH_MODEL else requestedModel
         if (apiKey.isBlank()) {
             return@withContext Result.failure(IllegalArgumentException("API Key cannot be empty."))
         }

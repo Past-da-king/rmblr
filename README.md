@@ -35,6 +35,17 @@ A tone is a name and a system prompt, nothing more. The built-ins are a starting
 point — write your own ("Rewrite this as a short LinkedIn post, no hashtags") and it
 appears on the arc alongside them.
 
+### Translate what you copy
+
+Optional, and off until you switch it on. Copy any text and the orb appears wearing a
+translate glyph; tap it and the translation comes back in a bubble you can read or
+copy. It goes away again a minute later.
+
+The clipboard is read **at the moment you tap and at no other time**. Android does not
+let an app read the clipboard in the background, and RMBLR does not try to work around
+that — it borrows input focus for a fraction of a second on your tap, reads, and hands
+focus straight back.
+
 ---
 
 ## What it looks like
@@ -62,10 +73,44 @@ through any server of ours, because there isn't one.
 
 ## Models
 
-Transcription runs on `gemini-3.1-flash-live-preview` over the Live WebSocket API,
-which handles isiZulu and code-switching noticeably better than the REST models. If it
-is unavailable or out of quota, the client walks down a fallback chain
-(`gemini-3.5-flash`, then `gemini-3.1-flash-lite`) rather than losing what you said.
+Transcription is a choice between three engines, in Settings.
+
+| Engine | What you get | Tones |
+|---|---|---|
+| **Gemini Flash Lite** (default) | Cheap and accurate, and it handles switching languages mid-sentence. | Yes |
+| **Gemini Live** | Audio streams to the model while you are still speaking, so the words are already there when you let go. | No |
+| **Groq Whisper** | The fastest of the three, and free to start. It is Whisper, so it is strong in one language and weaker across two. | Yes |
+
+Transcription is not the part that needs a large model, so the default is the cheapest
+one that does the job well. If it is out of quota the client walks down a fallback
+chain rather than losing what you said.
+
+**Gemini Live streams as you speak.** The socket opens when you press, audio goes up in
+200ms chunks, and the transcript accumulates while you are still talking — there is no
+upload after you stop. The trade is that a Live model is speech-to-speech and cannot
+rewrite text, so tone actions are unavailable in that mode. The app says so rather than
+quietly ignoring your tone.
+
+### Languages
+
+Whatever Gemini can hear, which is considerably more than its documented list — the
+language this was built for is not on that list and transcribes fine. Leave the
+language picker on **auto** unless you are being transcribed into the wrong language.
+
+### Translation providers
+
+Translation can run on Gemini, **Mistral, OpenRouter, Groq, OpenAI — or anything that
+speaks the OpenAI chat-completions API**, including a server on your own machine. Give
+it a base URL and a model name.
+
+---
+
+## Appearance
+
+Light, dark, or **OLED black** — true `#000000`, so the pixels are switched off on an
+OLED panel. **Material You** is on by default from Android 12: the app takes its
+palette from your wallpaper. OLED black keeps its black background and borrows only
+the accent colour.
 
 ---
 
