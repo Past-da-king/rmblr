@@ -47,7 +47,7 @@ object GeminiApiClient {
             "Everything the speaker was actually dictating must survive untouched."
 
     /** Live models cannot rewrite text, so the cleanup pass always runs on this one. */
-    private const val POLISH_MODEL = "gemini-3.1-flash-lite"
+    private const val POLISH_MODEL = "gemini-3.5-flash-lite"
 
     /**
      * If the chosen model is out of quota or having a moment, drop down the list rather
@@ -60,14 +60,14 @@ object GeminiApiClient {
      * [LiveTranscriptionSession] over a socket instead.
      */
     private val FALLBACKS = listOf(
-        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash-lite",
         "gemini-3.5-flash"
     )
 
     /** The chosen model, then anything else worth trying, without repeats. */
     private fun chainFor(model: String): List<String> =
         (listOf(model) + FALLBACKS)
-            .filterNot { LiveTranscriptionSession.isLiveModel(it) }
+            .filterNot { LiveTranscriptionSession.isStreamingModel(it) }
             .distinct()
             .ifEmpty { FALLBACKS }
 
@@ -228,7 +228,7 @@ object GeminiApiClient {
 
         // A live model has no REST endpoint, so anything pointed here gets quietly
         // redirected to the model that can actually rewrite text.
-        val polishModel = if (LiveTranscriptionSession.isLiveModel(model)) POLISH_MODEL else model
+        val polishModel = if (LiveTranscriptionSession.isStreamingModel(model)) POLISH_MODEL else model
 
         try {
             val instructions = if (preset == CleanupPreset.CUSTOM && !customPrompt.isNullOrBlank()) {
@@ -296,7 +296,7 @@ object GeminiApiClient {
     suspend fun testConnection(apiKey: String, requestedModel: String = "gemini-3.5-flash"): Result<String> = withContext(Dispatchers.IO) {
         // A Live model has no REST endpoint to ping, so test the key against the text
         // model instead: the key is what we are actually checking.
-        val model = if (LiveTranscriptionSession.isLiveModel(requestedModel)) POLISH_MODEL else requestedModel
+        val model = if (LiveTranscriptionSession.isStreamingModel(requestedModel)) POLISH_MODEL else requestedModel
         if (apiKey.isBlank()) {
             return@withContext Result.failure(IllegalArgumentException("API Key cannot be empty."))
         }

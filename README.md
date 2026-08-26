@@ -84,19 +84,27 @@ Transcription is a choice between three engines, in Settings.
 
 | Engine | What you get | Tones |
 |---|---|---|
-| **Gemini Flash Lite** (default) | Cheap and accurate, and it handles switching languages mid-sentence. | Yes |
-| **Gemini Live** | Audio streams to the model while you are still speaking, so the words are already there when you let go. | No |
-| **Groq Whisper** | The fastest of the three, and free to start. It is Whisper, so it is strong in one language and weaker across two. | Yes |
+| **Gemini Transcribe Live** (default) | Built for this one job. Words appear while you speak, and it answers in text rather than speech — so no spoken reply is generated, waited for, or billed. | No |
+| **Gemini Flash Lite** | Cheap and accurate, handles switching languages mid-sentence, and the one to pick when you want a tone. | Yes |
+| **Gemini Live** | The previous streaming model, kept so nobody's choice vanishes. It generates a spoken answer that is thrown away unheard and billed anyway. | No |
+| **Groq Whisper** | Fast and free to start. It is Whisper, so it is strong in one language and weaker across two. | Yes |
 
 Transcription is not the part that needs a large model, so the default is the cheapest
 one that does the job well. If it is out of quota the client walks down a fallback
 chain rather than losing what you said.
 
-**Gemini Live streams as you speak.** The socket opens when you press, audio goes up in
-200ms chunks, and the transcript accumulates while you are still talking — there is no
-upload after you stop. The trade is that a Live model is speech-to-speech and cannot
-rewrite text, so tone actions are unavailable in that mode. The app says so rather than
-quietly ignoring your tone.
+**The streaming engines send audio as you speak.** The socket opens when you press,
+audio goes up in 200ms chunks, and the transcript accumulates while you are still
+talking — there is no upload after you stop.
+
+`gemini-3.5-transcribe-live` is the one to use. It accepts a TEXT response modality and
+refuses AUDIO, which means it returns the transcript and nothing else: no spoken reply
+is generated, so none is billed. The older speech-to-speech Live model is the exact
+reverse — it refuses TEXT, and produces an answer for every dictation that nobody hears
+and everybody pays for.
+
+Neither can rewrite text, so tone actions are unavailable while streaming. The app says
+so rather than quietly ignoring your tone.
 
 ### Languages
 

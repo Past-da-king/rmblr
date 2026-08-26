@@ -36,10 +36,12 @@ import java.util.concurrent.TimeUnit
  * buffer.
  *
  * Two details that matter:
- *  - `responseModalities` must be AUDIO. These are speech-to-speech models and they
- *    reject TEXT outright; the transcript never comes from the model's reply. It comes
- *    from `inputAudioTranscription`, which transcribes what YOU said. So we ask for
- *    audio out, ignore every byte of it, and read the input transcript.
+ *  - The response modality is a property of the MODEL, not a preference. The older
+ *    speech-to-speech models reject TEXT and must be asked for AUDIO — whose every byte
+ *    we then throw away, having paid for it. `gemini-3.5-transcribe-live` is the
+ *    opposite: it rejects AUDIO, generates no reply at all, and simply returns the
+ *    transcript. Either way the words come from `inputAudioTranscription`, which
+ *    transcribes what YOU said rather than what the model wants to answer.
  *  - We deliberately do NOT wait for `turnComplete`. That flag means the model has
  *    finished generating the spoken answer we are throwing away, which can take
  *    seconds. Once the input transcript has gone quiet for [QUIET_MS] after the audio
@@ -49,7 +51,16 @@ class LiveTranscriptionSession(
     apiKey: String,
     model: String,
     languageHint: String?,
-    vocabulary: String? = null
+    vocabulary: String? = null,
+    /**
+     * Ask for TEXT back instead of speech.
+     *
+     * The transcribe models refuse AUDIO and return nothing but the transcript, which is
+     * the whole point of them: no spoken reply is generated, so none is billed and none
+     * has to be waited for. The older speech-to-speech Live models are the reverse — they
+     * refuse TEXT — so this is not a preference, it is a property of the model.
+     */
+    val textOnly: Boolean = false
 ) {
 
     private val transcript = StringBuilder()
@@ -77,7 +88,7 @@ class LiveTranscriptionSession(
         socket = client.newWebSocket(request, object : WebSocketListener() {
 
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                webSocket.send(setupFrame(model, languageHint, vocabulary).toString())
+                webSocket.send(setupFrame(model, languageHint, vocabulary, textOnly).toString())
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) = handle(webSocket, text)
@@ -231,7 +242,12 @@ class LiveTranscriptionSession(
         )
     ).toString()
 
-    private fun setupFrame(model: String, languageHint: String?, vocabulary: String?): JSONObject {
+    private fun setupFrame(
+        model: String,
+        languageHint: String?,
+        vocabulary: String?,
+        textOnly: Boolean
+    ): JSONObject {
         val instruction = buildString {
             append("You are a transcription service. Transcribe the user's speech exactly. ")
             append("Never reply, never answer, never add commentary. ")
@@ -247,7 +263,10 @@ class LiveTranscriptionSession(
                 .put("model", "models/$model")
                 .put(
                     "generationConfig",
-                    JSONObject().put("responseModalities", JSONArray().put("AUDIO"))
+                    JSONObject().put(
+                        "responseModalities",
+                        JSONArray().put(if (textOnly) "TEXT" else "AUDIO")
+                    )
                 )
                 .put("inputAudioTranscription", JSONObject())
                 .put(
@@ -286,6 +305,14 @@ class LiveTranscriptionSession(
             .pingInterval(20, TimeUnit.SECONDS)
             .build()
 
-        fun isLiveModel(model: String): Boolean = model.contains("live", ignoreCase = true)
+        /**
+         * Models that only exist on the socket.
+         *
+         * Anything matching this has no REST endpoint at all, so pointing
+         * `generateContent` at it returns a flat 404. Both families are caught: the
+         * older `-live-` speech models and the newer `-transcribe-live` ones.
+         */
+        fun isStreamingModel(model: String): Boolean =
+            model.contains("live", ignoreCase = true)
     }
 }

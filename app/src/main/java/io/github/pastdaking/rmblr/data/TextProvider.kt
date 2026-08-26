@@ -26,7 +26,7 @@ enum class TextProvider(
     GEMINI(
         label = "Gemini",
         baseUrl = "",
-        defaultModel = "gemini-3.1-flash-lite",
+        defaultModel = "gemini-3.5-flash-lite",
         blurb = "Uses the Gemini key you already have. Best on African languages.",
         usesGeminiKey = true
     ),

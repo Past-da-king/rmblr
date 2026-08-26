@@ -53,7 +53,8 @@ class DictationController(
                     apiKey = apiKey,
                     model = engine.id,
                     languageHint = language.code.takeIf { it.isNotBlank() }?.let { language.label },
-                    vocabulary = dictionary?.promptHint()
+                    vocabulary = dictionary?.promptHint(),
+                    textOnly = engine.textOnly
                 )
             }.getOrNull()
         } else {
