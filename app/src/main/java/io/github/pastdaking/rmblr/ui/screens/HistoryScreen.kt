@@ -6,6 +6,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.platform.LocalContext
 import io.github.pastdaking.rmblr.data.DictionaryEntry
 import io.github.pastdaking.rmblr.data.DictionaryRepository
+import io.github.pastdaking.rmblr.ui.components.pressable
+import io.github.pastdaking.rmblr.ui.theme.OnAccent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -109,7 +111,7 @@ fun HistoryScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("History", color = TextHigh, style = MaterialTheme.typography.headlineMedium)
+            Text("History", color = TextHigh, style = MaterialTheme.typography.displaySmall)
 
             if (selectedTab == 0 && historyItems.isNotEmpty()) {
                 IconButton(onClick = { historyRepo.clearHistory() }) {
@@ -141,7 +143,7 @@ fun HistoryScreen(
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(Space.sm),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = Space.xxl),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = Space.navClear),
                     modifier = Modifier.weight(1f)
                 ) {
                     items(historyItems, key = { it.id }) { item ->
@@ -222,7 +224,7 @@ fun HistoryScreen(
                 } else {
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(Space.sm),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = Space.xxl),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = Space.navClear),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         items(snippetItems, key = { it.id }) { snippet ->
@@ -283,20 +285,20 @@ private fun SegmentTab(label: String, count: Int, selected: Boolean, onClick: ()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .clip(RoundedCornerShape(Radius.control))
-            .background(if (selected) AccentWash else Surface)
-            .clickable { onClick() }
+            .pressable(onClick = onClick)
+            .clip(RoundedCornerShape(Radius.pill))
+            .background(if (selected) Accent else Surface)
             .padding(horizontal = Space.lg, vertical = Space.md)
     ) {
         Text(
             text = label,
-            color = if (selected) Accent else TextMid,
+            color = if (selected) OnAccent else TextMid,
             style = MaterialTheme.typography.labelLarge
         )
         Spacer(Modifier.width(Space.sm))
         Text(
             text = count.toString(),
-            color = if (selected) Accent else TextLow,
+            color = if (selected) OnAccent.copy(alpha = 0.7f) else TextLow,
             style = MaterialTheme.typography.labelSmall
         )
     }
@@ -414,7 +416,7 @@ private fun DictionaryTab(
 ) {
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(Space.sm),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = Space.xxl),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = Space.navClear),
         modifier = modifier.fillMaxWidth()
     ) {
         item {
@@ -459,7 +461,7 @@ private fun DictionaryTab(
                             color = Accent,
                             style = MaterialTheme.typography.labelLarge,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(Radius.control))
+                                .clip(RoundedCornerShape(Radius.pill))
                                 .background(AccentWash)
                                 .clickable { onAddSuggestion(candidate) }
                                 .padding(horizontal = Space.md, vertical = Space.sm)

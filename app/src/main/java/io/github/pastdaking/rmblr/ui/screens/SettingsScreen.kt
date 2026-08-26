@@ -1,6 +1,10 @@
 package io.github.pastdaking.rmblr.ui.screens
 
 import androidx.activity.compose.BackHandler
+import io.github.pastdaking.rmblr.ui.components.pressable
+import io.github.pastdaking.rmblr.ui.theme.OnAccent
+import io.github.pastdaking.rmblr.ui.components.IconChip
+import io.github.pastdaking.rmblr.ui.components.ScreenHeader
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -118,20 +122,16 @@ fun SettingsScreen(
             .background(Ink)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = Space.xl)
-            .padding(top = Space.xl, bottom = Space.xxl)
+            .padding(top = Space.xl, bottom = Space.navClear)
             .testTag("settings_screen")
     ) {
         val group = openGroup
 
         if (group == null) {
-            Text("Settings", color = TextHigh, style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.height(Space.xs))
-            Text(
-                text = "Four things to set, and then you can forget this page exists.",
-                color = TextMid,
-                style = MaterialTheme.typography.bodyMedium
+            ScreenHeader(
+                title = "Settings",
+                subtitle = "Four things to set, then you can forget this page exists."
             )
-            Spacer(Modifier.height(Space.xxl))
 
             Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
                 SettingsGroup.values().forEach { entry ->
@@ -174,12 +174,12 @@ private fun GroupRow(group: SettingsGroup, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .pressable(onClick = onClick)
             .clip(RoundedCornerShape(Radius.panel))
             .background(Surface)
-            .clickable(onClick = onClick)
             .padding(Space.lg)
     ) {
-        Icon(group.icon, contentDescription = null, tint = Accent, modifier = Modifier.size(22.dp))
+        IconChip(group.icon)
         Spacer(Modifier.width(Space.lg))
         Column(modifier = Modifier.weight(1f)) {
             Text(group.label, color = TextHigh, style = MaterialTheme.typography.titleMedium)
@@ -589,9 +589,9 @@ private fun ChoiceRow(
         verticalAlignment = Alignment.Top,
         modifier = Modifier
             .fillMaxWidth()
+            .pressable(onClick = onClick)
             .clip(RoundedCornerShape(Radius.panel))
             .background(if (selected) AccentWash else Surface)
-            .clickable(onClick = onClick)
             .padding(Space.lg)
     ) {
         Column(
@@ -630,12 +630,12 @@ private fun ChoiceRow(
 private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         text = label,
-        color = if (selected) Accent else TextMid,
+        color = if (selected) OnAccent else TextMid,
         style = MaterialTheme.typography.labelLarge,
         modifier = Modifier
-            .clip(RoundedCornerShape(Radius.control))
-            .background(if (selected) AccentWash else Raised)
-            .clickable(onClick = onClick)
+            .pressable(onClick = onClick)
+            .clip(RoundedCornerShape(Radius.pill))
+            .background(if (selected) Accent else Raised)
             .padding(horizontal = Space.lg, vertical = Space.md)
     )
 }

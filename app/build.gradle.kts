@@ -18,14 +18,15 @@ val geminiApiKey: String =
 
 android {
   namespace = "io.github.pastdaking.rmblr"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  // The 2026 Compose BOM requires API 37 to compile against; the app still targets 36.
+  compileSdk { version = release(37) }
 
   defaultConfig {
     applicationId = "io.github.pastdaking.rmblr"
     minSdk = 24
     targetSdk = 36
-    versionCode = 6
-    versionName = "1.4.0"
+    versionCode = 10
+    versionName = "1.5.3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

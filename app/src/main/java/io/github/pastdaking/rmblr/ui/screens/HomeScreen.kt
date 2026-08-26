@@ -11,6 +11,9 @@ import io.github.pastdaking.rmblr.ai.Translator
 import io.github.pastdaking.rmblr.data.languageFor
 import io.github.pastdaking.rmblr.ui.components.Radius
 import androidx.compose.foundation.horizontalScroll
+import io.github.pastdaking.rmblr.ui.components.ScreenHeader
+import io.github.pastdaking.rmblr.ui.components.PanelTone
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -167,18 +170,57 @@ fun HomeScreen(
 
     val ready = canOverlay && canWatch
 
+    // One definition of what tapping the mic does, lifted out so the hero card stays
+    // readable and there is no second copy to drift from this one.
+    val micTap: () -> Unit = {
+        if (isRecording) {
+            working = true
+            status = "Transcribing"
+            scope.launch {
+                // Verbatim means no rewriting call at all. Anything else
+                // hands the tone's own prompt down, custom included.
+                val instruction = when {
+                    currentMode == TranscriptionMode.DIRECT_VERBATIM -> null
+                    currentPreset == CleanupPreset.CUSTOM ->
+                        prefsManager.getCustomPrompt().takeIf { it.isNotBlank() }
+                    else -> currentPreset.systemPrompt
+                }
+                val result = withContext(Dispatchers.IO) { dictation.finish(instruction) }
+                working = false
+                result.onSuccess { (raw, cleaned) ->
+                    transcript = cleaned
+                    status = null
+                    historyRepo.addHistoryItem(
+                        DictationHistoryItem(
+                            rawText = raw,
+                            cleanedText = cleaned,
+                            mode = currentMode,
+                            preset = currentPreset
+                        )
+                    )
+                }.onFailure { status = it.message ?: "That didn't work." }
+            }
+        } else {
+            transcript = null
+            status = null
+            dictation.begin()
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(Ink)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = Space.xl)
-            .padding(top = Space.xl, bottom = Space.xxl)
+            .padding(top = Space.xl, bottom = Space.navClear)
             .testTag("home_screen_content")
     ) {
-        Text("RMBLR", color = TextHigh, style = MaterialTheme.typography.headlineMedium)
-
-        Spacer(Modifier.height(Space.xl))
+        ScreenHeader(
+            title = "RMBLR",
+            subtitle = if (ready) "Ready. Tap a text box anywhere and the orb shows up."
+                       else "Two permissions to go."
+        )
 
         SectionLabel("Setup")
 
@@ -515,9 +557,14 @@ fun HomeScreen(
             }
         }
 
+
         Spacer(Modifier.height(Space.xxl))
 
-        SectionLabel("Try it here")
+        // Testing goes last, and small. It sat at the top as a large card for one
+        // release and was wrong twice over: it is the least important thing on a setup
+        // screen, and you cannot sensibly try the app before you have finished telling
+        // it what to do.
+        SectionLabel("Try it")
 
         Panel {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -525,92 +572,38 @@ fun HomeScreen(
                     isRecording = isRecording,
                     isProcessing = working,
                     amplitude = amplitude,
-                    size = 56.dp,
-                    onClick = {
-                        if (isRecording) {
-                            working = true
-                            status = "Transcribing"
-                            scope.launch {
-                                // Verbatim means no rewriting call at all. Anything else
-                                // hands the tone's own prompt down, custom included.
-                                val instruction = when {
-                                    currentMode == TranscriptionMode.DIRECT_VERBATIM -> null
-                                    currentPreset == CleanupPreset.CUSTOM ->
-                                        prefsManager.getCustomPrompt().takeIf { it.isNotBlank() }
-                                    else -> currentPreset.systemPrompt
-                                }
-                                val result = withContext(Dispatchers.IO) { dictation.finish(instruction) }
-                                working = false
-                                result.onSuccess { (raw, cleaned) ->
-                                    transcript = cleaned
-                                    status = null
-                                    historyRepo.addHistoryItem(
-                                        DictationHistoryItem(
-                                            rawText = raw,
-                                            cleanedText = cleaned,
-                                            mode = currentMode,
-                                            preset = currentPreset
-                                        )
-                                    )
-                                }.onFailure { status = it.message ?: "That didn't work." }
-                            }
-                        } else {
-                            transcript = null
-                            status = null
-                            dictation.begin()
-                        }
-                    }
+                    size = 48.dp,
+                    prominent = true,
+                    onClick = { micTap() }
                 )
 
                 Spacer(Modifier.width(Space.lg))
 
-                LiveWaveformVisualizer(
-                    amplitude = amplitude,
-                    isRecording = isRecording,
+                Text(
+                    text = when {
+                        working -> "Transcribing"
+                        isRecording && heardSoFar.isNotBlank() -> heardSoFar
+                        isRecording -> "Listening. Tap again when you're done."
+                        transcript != null -> transcript!!
+                        status != null -> status!!
+                        else -> "Tap and speak."
+                    },
+                    color = if (transcript != null || (isRecording && heardSoFar.isNotBlank())) TextHigh else TextMid,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f)
                 )
-            }
 
-            Spacer(Modifier.height(Space.md))
-
-            Text(
-                text = when {
-                    working -> status ?: "Transcribing"
-                    isRecording && heardSoFar.isNotBlank() -> heardSoFar
-                    isRecording -> "Listening. Tap again when you're done."
-                    status != null -> status!!
-                    else -> "Tap and speak."
-                },
-                color = when {
-                    isRecording && heardSoFar.isNotBlank() -> TextHigh
-                    isRecording -> Alert
-                    working -> Accent
-                    status != null -> Alert
-                    else -> TextMid
-                },
-                style = MaterialTheme.typography.bodySmall
-            )
-
-            if (transcript != null) {
-                Spacer(Modifier.height(Space.lg))
-                Hairline()
-                Spacer(Modifier.height(Space.lg))
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                    Text(
-                        text = transcript ?: "",
-                        color = TextHigh,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(Space.md))
+                if (transcript != null) {
                     IconButton(
-                        onClick = {
-                            clipboard.setText(AnnotatedString(transcript ?: ""))
-                            status = "Copied"
-                        },
+                        onClick = { clipboard.setText(AnnotatedString(transcript ?: "")) },
                         modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = TextMid, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = "Copy",
+                            tint = TextMid,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }

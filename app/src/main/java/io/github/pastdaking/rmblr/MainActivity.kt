@@ -9,6 +9,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import io.github.pastdaking.rmblr.ui.components.Radius
+import io.github.pastdaking.rmblr.ui.components.pressable
+import io.github.pastdaking.rmblr.ui.theme.Line
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -135,49 +145,25 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     containerColor = Ink,
                     bottomBar = {
-                        NavigationBar(
-                            containerColor = Surface,
-                            contentColor = TextHigh,
-                            tonalElevation = 0.dp,
-                            modifier = Modifier.testTag("main_bottom_nav")
-                        ) {
-                            navItems.forEachIndexed { index, item ->
-                                val isSelected = selectedTabIndex == index
-                                NavigationBarItem(
-                                    selected = isSelected,
-                                    onClick = { selectedTabIndex = index },
-                                    icon = {
-                                        Icon(
-                                            imageVector = item.icon,
-                                            contentDescription = item.title,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    },
-                                    label = {
-                                        Text(
-                                            text = item.title,
-                                            style = MaterialTheme.typography.labelSmall
-                                        )
-                                    },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = Accent,
-                                        selectedTextColor = Accent,
-                                        unselectedIconColor = TextLow,
-                                        unselectedTextColor = TextLow,
-                                        indicatorColor = AccentWash
-                                    ),
-                                    modifier = Modifier.testTag(item.testTag)
-                                )
-                            }
-                        }
+                        FloatingNav(
+                            items = navItems,
+                            selected = selectedTabIndex,
+                            onSelect = { selectedTabIndex = it }
+                        )
                     },
                     modifier = Modifier.fillMaxSize()
                 ) { innerPadding ->
+                    // Only the TOP inset is applied. Taking the bottom one as well
+                    // ended the content in a hard horizontal edge with the bar sitting
+                    // below it on a bare strip — which is exactly what a floating bar
+                    // must not look like. The screens run full height and pass behind
+                    // it instead; each one carries Space.navClear at the end of its own
+                    // scroll so nothing is stranded underneath.
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(Ink)
-                            .padding(innerPadding)
+                            .padding(top = innerPadding.calculateTopPadding())
                     ) {
                         if (!hasMicPermission) {
                             MicPermissionBanner(
@@ -203,6 +189,90 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The bottom navigation, as a bar that floats rather than one bolted to the edge.
+ *
+ * A full-bleed navigation bar reads as chrome — the part of the screen the app did not
+ * design. Lifting it off the edges, rounding it fully and letting the selected tab
+ * spread into a filled pill is the Material 3 Expressive treatment, and it is the single
+ * change that does most to stop this looking like a settings app.
+ *
+ * The selected tab is the only one that carries its label. Four words competing at the
+ * bottom of every screen is noise; one word telling you where you are is navigation.
+ */
+@Composable
+private fun FloatingNav(
+    items: List<NavItem>,
+    selected: Int,
+    onSelect: (Int) -> Unit
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Space.lg, vertical = Space.md)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.xs),
+            modifier = Modifier
+                .clip(RoundedCornerShape(Radius.pill))
+                .background(Surface)
+                .border(1.dp, Line, RoundedCornerShape(Radius.pill))
+                .padding(Space.sm)
+                .testTag("main_bottom_nav")
+        ) {
+            items.forEachIndexed { index, item ->
+                NavPill(
+                    item = item,
+                    selected = selected == index,
+                    onClick = { onSelect(index) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavPill(item: NavItem, selected: Boolean, onClick: () -> Unit) {
+    // Springs, not curves: the pill overshoots a touch as it takes the label in, which
+    // is what makes the switch feel like a physical thing moving rather than a redraw.
+    val weight by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 380f),
+        label = "nav_pill"
+    )
+    val tint = lerp(TextLow, OnAccent, weight)
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .pressable(onClick = onClick)
+            .clip(RoundedCornerShape(Radius.pill))
+            .background(lerp(Surface, Accent, weight))
+            .padding(horizontal = (12 + 6 * weight).dp, vertical = 12.dp)
+            .testTag(item.testTag)
+    ) {
+        Icon(
+            imageVector = item.icon,
+            contentDescription = item.title,
+            tint = tint,
+            modifier = Modifier.size(22.dp)
+        )
+        if (weight > 0.01f) {
+            Spacer(Modifier.width((6 * weight).dp))
+            Text(
+                text = item.title,
+                color = tint,
+                maxLines = 1,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.graphicsLayer { alpha = weight }
+            )
         }
     }
 }

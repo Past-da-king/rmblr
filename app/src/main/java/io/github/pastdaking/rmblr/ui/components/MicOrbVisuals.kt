@@ -61,7 +61,16 @@ fun MicButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 44.dp,
-    idleAlpha: Float = 1f
+    idleAlpha: Float = 1f,
+    /**
+     * Fill the disc with the accent instead of leaving it grey.
+     *
+     * A grey disc is right when the button is one control among many. When it IS the
+     * screen, the colour belongs on the button rather than smeared across the container
+     * behind it — a tinted slab with a grey circle in it reads as a highlighted row, not
+     * as the thing you are meant to press.
+     */
+    prominent: Boolean = false
 ) {
     val ring by animateFloatAsState(
         targetValue = if (isRecording) 1f + (amplitude.coerceIn(0f, 1f) * 0.26f) else 1f,
@@ -89,11 +98,17 @@ fun MicButton(
             modifier = Modifier
                 .size(disc)
                 .clip(CircleShape)
-                .background(if (isRecording) Alert else Raised)
+                .background(
+                    when {
+                        isRecording -> Alert
+                        prominent -> Accent
+                        else -> Raised
+                    }
+                )
         ) {
             if (isProcessing) {
                 CircularProgressIndicator(
-                    color = Accent,
+                    color = if (prominent) OnAccent else Accent,
                     strokeWidth = 2.dp,
                     modifier = Modifier.size(glyph)
                 )
@@ -101,7 +116,7 @@ fun MicButton(
                 Icon(
                     imageVector = Icons.Default.Mic,
                     contentDescription = if (isRecording) "Stop recording" else "Start recording",
-                    tint = if (isRecording) OnAccent else TextHigh,
+                    tint = if (isRecording || prominent) OnAccent else TextHigh,
                     modifier = Modifier.size(glyph)
                 )
             }

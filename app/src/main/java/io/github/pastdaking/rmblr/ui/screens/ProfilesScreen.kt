@@ -170,7 +170,7 @@ fun ProfilesScreen(modifier: Modifier = Modifier) {
             .background(Ink)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = Space.xl)
-            .padding(top = Space.xl, bottom = Space.xxl)
+            .padding(top = Space.xl, bottom = Space.navClear)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(

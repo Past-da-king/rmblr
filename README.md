@@ -35,6 +35,13 @@ A tone is a name and a system prompt, nothing more. The built-ins are a starting
 point — write your own ("Rewrite this as a short LinkedIn post, no hashtags") and it
 appears on the arc alongside them.
 
+### A dictionary of your own words
+
+Names, places and jargon get guessed at, and differently every time. Add them once and
+they are handed to whichever engine is running before it hears anything — with an
+optional spelling for the ones that never come out right. The list suggests itself from
+what you have already dictated, so you tap rather than type.
+
 ### Translate what you copy
 
 Optional, and off until you switch it on. Copy any text and the orb appears wearing a
@@ -135,7 +142,8 @@ keyPassword=...
 Both that file and any `*.jks` are gitignored. Without it, `assembleRelease` simply
 produces an unsigned APK.
 
-**Requirements:** Android 7.0+ (API 24). Built with Kotlin and Jetpack Compose.
+**Requirements:** Android 7.0+ (API 24), compiled against API 37. Built with Kotlin and
+Jetpack Compose, styled to Material 3 Expressive.
 
 ---
 
