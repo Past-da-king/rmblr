@@ -21,16 +21,17 @@ class PreferencesManager private constructor(context: Context) {
     private val _engineFlow = MutableStateFlow(getEngine())
     val engineFlow: StateFlow<TranscriptionEngine> = _engineFlow.asStateFlow()
 
-    private val _groqKeyFlow = MutableStateFlow(getGroqApiKey())
+    /** The key belonging to whichever engine is selected right now. */
+    private val _groqKeyFlow = MutableStateFlow(getEngineKey(getEngine()))
     val groqKeyFlow: StateFlow<String> = _groqKeyFlow.asStateFlow()
 
-    private val _languageFlow = MutableStateFlow(getLanguageCode())
+    private val _languageFlow = MutableStateFlow(getSpokenLanguage())
     val languageFlow: StateFlow<String> = _languageFlow.asStateFlow()
 
     private val _translateEnabledFlow = MutableStateFlow(isTranslateEnabled())
     val translateEnabledFlow: StateFlow<Boolean> = _translateEnabledFlow.asStateFlow()
 
-    private val _translateTargetFlow = MutableStateFlow(getTranslateTargetCode())
+    private val _translateTargetFlow = MutableStateFlow(getTranslateTarget())
     val translateTargetFlow: StateFlow<String> = _translateTargetFlow.asStateFlow()
 
     private val _textProviderFlow = MutableStateFlow(getTextProvider())
@@ -89,16 +90,40 @@ class PreferencesManager private constructor(context: Context) {
         prefs.edit().putString("engine", engine.name).apply()
         _engineFlow.value = engine
         _modelFlow.value = engine.id
+        _groqKeyFlow.value = getEngineKey(engine)
     }
 
-    // ---- Groq key -------------------------------------------------------
+    // ---- per-engine keys and models -------------------------------------
+    //
+    // Groq, Mistral and OpenRouter each bring their own key, and two of them front many
+    // models. Keys are stored per engine so switching between them does not make you
+    // paste the previous one back in.
 
-    fun getGroqApiKey(): String = prefs.getString("groq_api_key", "") ?: ""
-
-    fun setGroqApiKey(key: String) {
-        prefs.edit().putString("groq_api_key", key.trim()).apply()
-        _groqKeyFlow.value = key.trim()
+    fun getEngineKey(engine: TranscriptionEngine): String {
+        val stored = prefs.getString("engine_key_${engine.name}", null)
+        if (stored != null) return stored
+        // Groq had its own key long before this was generalised; carry it forward.
+        return if (engine == TranscriptionEngine.GROQ) prefs.getString("groq_api_key", "") ?: "" else ""
     }
+
+    fun setEngineKey(engine: TranscriptionEngine, key: String) {
+        prefs.edit().putString("engine_key_${engine.name}", key.trim()).apply()
+        if (engine == getEngine()) _groqKeyFlow.value = key.trim()
+    }
+
+    /** Blank falls back to the engine's own default, so only the open-ended ones need typing into. */
+    fun getEngineModel(engine: TranscriptionEngine): String {
+        val stored = prefs.getString("engine_model_${engine.name}", "") ?: ""
+        return stored.ifBlank { engine.id }
+    }
+
+    fun setEngineModel(engine: TranscriptionEngine, model: String) {
+        prefs.edit().putString("engine_model_${engine.name}", model.trim()).apply()
+    }
+
+    fun getGroqApiKey(): String = getEngineKey(TranscriptionEngine.GROQ)
+
+    fun setGroqApiKey(key: String) = setEngineKey(TranscriptionEngine.GROQ, key)
 
     // ---- spoken language ------------------------------------------------
     //
@@ -106,11 +131,31 @@ class PreferencesManager private constructor(context: Context) {
     // leave it on. Naming a language only helps when you know the transcriber is
     // guessing wrong.
 
-    fun getLanguageCode(): String = prefs.getString("language_code", "") ?: ""
+    /**
+     * The language, as a NAME the user typed, or blank for auto.
+     *
+     * It used to be a code chosen from a fixed strip of chips, which is fine right up
+     * until your language is not one of the fifteen someone else picked. It is only ever
+     * a word handed to a model, so any word will do.
+     */
+    fun getSpokenLanguage(): String = prefs.getString("language_name", "") ?: ""
+
+    fun setSpokenLanguage(name: String) {
+        prefs.edit().putString("language_name", name.trim()).apply()
+        _languageFlow.value = name.trim()
+    }
+
+    /**
+     * The ISO code, when the typed name happens to be one we recognise.
+     *
+     * Only the OpenAI-shaped transcribers want a code, and they are all happy without
+     * one. So an unrecognised name is not an error — the name still reaches the model as
+     * context, it just does not also become a `language` field.
+     */
+    fun getLanguageCode(): String = languageCodeFor(getSpokenLanguage())
 
     fun setLanguageCode(code: String) {
-        prefs.edit().putString("language_code", code).apply()
-        _languageFlow.value = code
+        setSpokenLanguage(languageFor(code).label.takeIf { code.isNotBlank() } ?: "")
     }
 
     fun getTranscriptionMode(): TranscriptionMode {
@@ -163,12 +208,18 @@ class PreferencesManager private constructor(context: Context) {
         _translateEnabledFlow.value = enabled
     }
 
-    fun getTranslateTargetCode(): String = prefs.getString("translate_target", "en") ?: "en"
+    /** Also a typed name, for the same reason. */
+    fun getTranslateTarget(): String = prefs.getString("translate_target_name", "English") ?: "English"
 
-    fun setTranslateTargetCode(code: String) {
-        prefs.edit().putString("translate_target", code).apply()
-        _translateTargetFlow.value = code
+    fun setTranslateTarget(name: String) {
+        val cleaned = name.trim().ifBlank { "English" }
+        prefs.edit().putString("translate_target_name", cleaned).apply()
+        _translateTargetFlow.value = cleaned
     }
+
+    fun getTranslateTargetCode(): String = getTranslateTarget()
+
+    fun setTranslateTargetCode(code: String) = setTranslateTarget(languageFor(code).label)
 
     // ---- text provider --------------------------------------------------
 

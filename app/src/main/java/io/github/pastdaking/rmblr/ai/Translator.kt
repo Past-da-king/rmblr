@@ -3,7 +3,6 @@ package io.github.pastdaking.rmblr.ai
 import io.github.pastdaking.rmblr.data.CleanupPreset
 import io.github.pastdaking.rmblr.data.PreferencesManager
 import io.github.pastdaking.rmblr.data.TextProvider
-import io.github.pastdaking.rmblr.data.languageFor
 
 /**
  * Copy something, tap the orb, read it in your language.
@@ -29,7 +28,7 @@ object Translator {
             return Result.failure(IllegalStateException("Nothing to translate. Copy some text first."))
         }
 
-        val target = languageFor(prefs.getTranslateTargetCode()).label
+        val target = prefs.getTranslateTarget()
         val provider = prefs.getTextProvider()
 
         if (provider == TextProvider.GEMINI) {

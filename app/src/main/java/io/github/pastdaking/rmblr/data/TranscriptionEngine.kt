@@ -18,10 +18,12 @@ package io.github.pastdaking.rmblr.data
  *  - [GEMINI_LIVE] is the previous streaming model, kept so nobody's choice disappears
  *    under them. It is speech-to-speech: it generates a spoken answer for every
  *    dictation that is thrown away unheard and billed anyway.
- *  - [GROQ] is here because two people asked for it on the launch thread. It is the
- *    fastest batch transcriber going, but it runs Whisper, which is the exact model
- *    that mangles code-switching — the reason this app exists. So it is offered
- *    honestly rather than recommended.
+ *  - [GROQ], [MISTRAL_VOXTRAL] and [OPENROUTER_STT] are here because people asked for
+ *    them on the launch thread — the last of those pointing out, fairly, that Mistral
+ *    and OpenRouter had been wired up for translation while dictation was still
+ *    Gemini-only. All three speak the same OpenAI-shaped endpoint, so they share one
+ *    client. Groq runs Whisper, which is the exact model that mangles code-switching —
+ *    the reason this app exists — so it is offered honestly rather than recommended.
  */
 enum class TranscriptionEngine(
     val id: String,
@@ -32,7 +34,11 @@ enum class TranscriptionEngine(
     /** Does audio go up while you are still speaking, rather than after you stop? */
     val streams: Boolean,
     /** Needs its own key, separate from the Gemini one. */
-    val needsGroqKey: Boolean = false
+    val needsGroqKey: Boolean = false,
+    /** Where its OpenAI-shaped /audio/transcriptions endpoint lives. Blank for Gemini. */
+    val baseUrl: String = "",
+    /** Providers that front many models let you name the one you want. */
+    val editableModel: Boolean = false
 ) {
     GEMINI_TRANSCRIBE_LIVE(
         id = "gemini-3.5-transcribe-live",
@@ -57,11 +63,32 @@ enum class TranscriptionEngine(
     ),
     GROQ(
         id = "whisper-large-v3-turbo",
-        label = "Groq Whisper — fastest",
+        label = "Groq Whisper",
         blurb = "Very fast and free to start, but it is Whisper: strong on English, weaker when you switch languages mid-sentence. Needs a Groq key.",
         supportsTone = true,
         streams = false,
-        needsGroqKey = true
+        needsGroqKey = true,
+        baseUrl = "https://api.groq.com/openai/v1"
+    ),
+    MISTRAL_VOXTRAL(
+        id = "voxtral-mini-latest",
+        label = "Mistral Voxtral",
+        blurb = "Mistral's own transcriber. Strong across European languages, and priced to be used. Needs a Mistral key.",
+        supportsTone = true,
+        streams = false,
+        needsGroqKey = true,
+        baseUrl = "https://api.mistral.ai/v1",
+        editableModel = true
+    ),
+    OPENROUTER_STT(
+        id = "openai/gpt-4o-mini-transcribe",
+        label = "OpenRouter",
+        blurb = "One key, many transcribers — Voxtral, GPT-4o Transcribe, Whisper. Name whichever model you want. Needs an OpenRouter key.",
+        supportsTone = true,
+        streams = false,
+        needsGroqKey = true,
+        baseUrl = "https://openrouter.ai/api/v1",
+        editableModel = true
     );
 
     /**
@@ -138,3 +165,23 @@ val SPOKEN_LANGUAGES: List<SpokenLanguage> = listOf(
 
 fun languageFor(code: String?): SpokenLanguage =
     SPOKEN_LANGUAGES.firstOrNull { it.code == (code ?: "") } ?: SPOKEN_LANGUAGES.first()
+
+/**
+ * The ISO code for a typed language name, or blank if we do not recognise it.
+ *
+ * Blank is a perfectly good answer. The name still goes to the model as context; it
+ * simply does not also become a `language` form field on the providers that take one.
+ */
+fun languageCodeFor(name: String?): String {
+    val cleaned = name?.trim().orEmpty()
+    if (cleaned.isEmpty()) return ""
+    return SPOKEN_LANGUAGES.firstOrNull { it.label.equals(cleaned, ignoreCase = true) }?.code
+        ?: SPOKEN_LANGUAGES.firstOrNull { it.code.equals(cleaned, ignoreCase = true) }?.code
+        ?: ""
+}
+
+/** The handful worth offering as one-tap shortcuts under the text field. */
+val SUGGESTED_LANGUAGES: List<String> = listOf(
+    "English", "isiZulu", "isiXhosa", "Afrikaans", "Sesotho",
+    "Spanish", "French", "Portuguese", "German", "Arabic"
+)

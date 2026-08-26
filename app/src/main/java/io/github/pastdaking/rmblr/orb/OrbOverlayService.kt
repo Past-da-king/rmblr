@@ -57,7 +57,6 @@ import io.github.pastdaking.rmblr.data.DictationHistoryItem
 import io.github.pastdaking.rmblr.data.HistoryRepository
 import io.github.pastdaking.rmblr.data.DictionaryRepository
 import io.github.pastdaking.rmblr.data.PreferencesManager
-import io.github.pastdaking.rmblr.data.languageFor
 import io.github.pastdaking.rmblr.data.TranscriptionMode
 import io.github.pastdaking.rmblr.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.CoroutineScope
@@ -480,7 +479,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                     text = bubbleText,
                     error = bubbleError,
                     working = bubbleWorking,
-                    targetLanguage = languageFor(prefs.getTranslateTargetCode()).label,
+                    targetLanguage = prefs.getTranslateTarget(),
                     onCopy = { copyBubble() },
                     onDismiss = { dismissBubble() }
                 )

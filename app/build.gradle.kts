@@ -25,8 +25,8 @@ android {
     applicationId = "io.github.pastdaking.rmblr"
     minSdk = 24
     targetSdk = 36
-    versionCode = 11
-    versionName = "1.6.0"
+    versionCode = 13
+    versionName = "1.8.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

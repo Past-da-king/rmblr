@@ -8,7 +8,6 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import io.github.pastdaking.rmblr.ai.Translator
-import io.github.pastdaking.rmblr.data.languageFor
 import io.github.pastdaking.rmblr.ui.components.Radius
 import androidx.compose.foundation.horizontalScroll
 import io.github.pastdaking.rmblr.ui.components.ScreenHeader
@@ -435,7 +434,7 @@ fun HomeScreen(
             Spacer(Modifier.height(Space.lg))
 
             Text(
-                text = "Or paste something here, into ${languageFor(translateTarget).label}",
+                text = "Or paste something here, into $translateTarget",
                 color = TextLow,
                 style = MaterialTheme.typography.labelSmall
             )

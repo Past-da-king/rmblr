@@ -6,7 +6,6 @@ import io.github.pastdaking.rmblr.data.PreferencesManager
 import io.github.pastdaking.rmblr.data.TranscriptionEngine
 import io.github.pastdaking.rmblr.data.TranscriptionMode
 import io.github.pastdaking.rmblr.data.CleanupPreset
-import io.github.pastdaking.rmblr.data.languageFor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,7 +42,7 @@ class DictationController(
         _liveText.value = ""
 
         val apiKey = prefs.getEffectiveApiKey()
-        val language = languageFor(prefs.getLanguageCode())
+        val languageName = prefs.getSpokenLanguage()
 
         // The socket has to exist before the first buffer is read, or the opening
         // syllable is the one thing that never makes it up the wire.
@@ -52,7 +51,7 @@ class DictationController(
                 LiveTranscriptionSession(
                     apiKey = apiKey,
                     model = engine.id,
-                    languageHint = language.code.takeIf { it.isNotBlank() }?.let { language.label },
+                    languageHint = languageName.takeIf { it.isNotBlank() },
                     vocabulary = dictionary?.promptHint(),
                     textOnly = engine.textOnly
                 )
@@ -87,8 +86,9 @@ class DictationController(
 
         val wav = recorder.stopRecording()
         val apiKey = prefs.getEffectiveApiKey()
-        val groqKey = prefs.getGroqApiKey()
-        val language = languageFor(prefs.getLanguageCode())
+        val groqKey = prefs.getEngineKey(engine)
+        val languageName = prefs.getSpokenLanguage()
+        val languageCode = prefs.getLanguageCode()
 
         // ---- streaming path: usually already finished before we get here ----
         if (live != null) {
@@ -109,14 +109,20 @@ class DictationController(
 
         if (wav.size <= 200) return Result.failure(IllegalStateException("Nothing recorded."))
 
-        // ---- Groq: transcribe there, then polish on Gemini if a tone was asked for ----
-        if (engine == TranscriptionEngine.GROQ && groqKey.isNotBlank()) {
-            val heard = GroqApiClient.transcribe(
+        // ---- Groq / Mistral / OpenRouter: one endpoint shape, three hosts ----
+        //
+        // Transcribe there, then polish on Gemini if a tone was asked for. None of these
+        // providers rewrites text as part of transcribing, so the tone is a second call
+        // and only happens when one was actually requested.
+        if (engine.needsGroqKey && groqKey.isNotBlank()) {
+            val heard = SpeechToTextClient.transcribe(
                 wavBytes = wav,
+                baseUrl = engine.baseUrl,
                 apiKey = groqKey,
-                model = engine.id,
-                languageCode = language.code,
-                vocabulary = dictionary?.plainWordList()
+                model = prefs.getEngineModel(engine),
+                languageCode = languageCode,
+                vocabulary = dictionary?.plainWordList(),
+                providerName = engine.label
             )
             heard.onFailure { return Result.failure(it) }
             val raw = heard.getOrNull()?.trim().orEmpty()
@@ -142,7 +148,7 @@ class DictationController(
             mode = if (instruction.isNullOrBlank()) TranscriptionMode.DIRECT_VERBATIM
                    else TranscriptionMode.POST_PROCESS_CLEANUP,
             instruction = instruction,
-            languageHint = language.label.takeIf { language.code.isNotBlank() },
+            languageHint = languageName.takeIf { it.isNotBlank() },
             vocabulary = dictionary?.promptHint()
         )
     }

@@ -88,6 +88,8 @@ Transcription is a choice between three engines, in Settings.
 | **Gemini Flash Lite** | Cheap and accurate, handles switching languages mid-sentence, and the one to pick when you want a tone. | Yes |
 | **Gemini Live** | The previous streaming model, kept so nobody's choice vanishes. It generates a spoken answer that is thrown away unheard and billed anyway. | No |
 | **Groq Whisper** | Fast and free to start. It is Whisper, so it is strong in one language and weaker across two. | Yes |
+| **Mistral Voxtral** | Mistral's own transcriber, strong across European languages. Needs a Mistral key. | Yes |
+| **OpenRouter** | One key reaching Voxtral, GPT-4o Transcribe, Whisper and the rest. Name whichever model you want. | Yes |
 
 Transcription is not the part that needs a large model, so the default is the cheapest
 one that does the job well. If it is out of quota the client walks down a fallback
@@ -107,6 +109,10 @@ Neither can rewrite text, so tone actions are unavailable while streaming. The a
 so rather than quietly ignoring your tone.
 
 ### Languages
+
+You type it. A language is only a name handed to the model, so there is no list to hunt
+through and nothing to be missing from — write "isiZulu" or "Setswana" or anything else
+and it becomes context for the transcriber. Leave it blank for auto.
 
 Whatever Gemini can hear, which is considerably more than its documented list — the
 language this was built for is not on that list and transcribes fine. Leave the
