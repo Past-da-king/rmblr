@@ -117,7 +117,7 @@ class DictationController(
         if (engine.needsGroqKey && groqKey.isNotBlank()) {
             val heard = SpeechToTextClient.transcribe(
                 wavBytes = wav,
-                baseUrl = engine.baseUrl,
+                baseUrl = prefs.getProviderBaseUrl(engine.provider),
                 apiKey = groqKey,
                 model = prefs.getEngineModel(engine),
                 languageCode = languageCode,

@@ -22,7 +22,7 @@ class PreferencesManager private constructor(context: Context) {
     val engineFlow: StateFlow<TranscriptionEngine> = _engineFlow.asStateFlow()
 
     /** The key belonging to whichever engine is selected right now. */
-    private val _groqKeyFlow = MutableStateFlow(getEngineKey(getEngine()))
+    private val _groqKeyFlow = MutableStateFlow(getProviderKey(getEngine().provider))
     val groqKeyFlow: StateFlow<String> = _groqKeyFlow.asStateFlow()
 
     private val _languageFlow = MutableStateFlow(getSpokenLanguage())
@@ -99,17 +99,58 @@ class PreferencesManager private constructor(context: Context) {
     // models. Keys are stored per engine so switching between them does not make you
     // paste the previous one back in.
 
-    fun getEngineKey(engine: TranscriptionEngine): String {
-        val stored = prefs.getString("engine_key_${engine.name}", null)
-        if (stored != null) return stored
-        // Groq had its own key long before this was generalised; carry it forward.
-        return if (engine == TranscriptionEngine.GROQ) prefs.getString("groq_api_key", "") ?: "" else ""
+    /**
+     * The key for a PROVIDER, shared by everything that provider does.
+     *
+     * Keys used to be stored per feature, so a Mistral key pasted into dictation did
+     * nothing for translation and had to be typed again. An account is an account.
+     *
+     * Older per-feature keys are read forward the first time each provider is asked for,
+     * so nobody has to re-enter anything after upgrading.
+     */
+    fun getProviderKey(provider: Provider): String {
+        if (!provider.needsKey) return getEffectiveApiKey()
+        prefs.getString("provider_key_${provider.name}", null)?.let { return it }
+        // Where this provider's key used to live, newest scheme first.
+        val legacy = listOfNotNull(
+            TranscriptionEngine.values().firstOrNull { it.provider == provider }
+                ?.let { prefs.getString("engine_key_${it.name}", null) },
+            TextProvider.values().firstOrNull { it.provider == provider }
+                ?.let { prefs.getString("text_key_${it.name}", null) },
+            if (provider == Provider.GROQ) prefs.getString("groq_api_key", null) else null
+        )
+        return legacy.firstOrNull { it.isNotBlank() }.orEmpty()
     }
 
-    fun setEngineKey(engine: TranscriptionEngine, key: String) {
-        prefs.edit().putString("engine_key_${engine.name}", key.trim()).apply()
-        if (engine == getEngine()) _groqKeyFlow.value = key.trim()
+    fun setProviderKey(provider: Provider, key: String) {
+        if (!provider.needsKey) {
+            setUserApiKey(key)
+            return
+        }
+        prefs.edit().putString("provider_key_${provider.name}", key.trim()).apply()
+        _groqKeyFlow.value = key.trim()
+        _textKeyFlow.value = key.trim()
     }
+
+    /**
+     * Where a provider's API lives.
+     *
+     * Every provider but CUSTOM knows its own address, so this only ever needs typing
+     * into for a self-hosted or in-house endpoint — and like the key, it is stored once
+     * per provider and shared by dictation and translation.
+     */
+    fun getProviderBaseUrl(provider: Provider): String {
+        val stored = prefs.getString("provider_base_${provider.name}", "") ?: ""
+        return stored.ifBlank { provider.baseUrl }
+    }
+
+    fun setProviderBaseUrl(provider: Provider, url: String) {
+        prefs.edit().putString("provider_base_${provider.name}", url.trim()).apply()
+    }
+
+    fun getEngineKey(engine: TranscriptionEngine): String = getProviderKey(engine.provider)
+
+    fun setEngineKey(engine: TranscriptionEngine, key: String) = setProviderKey(engine.provider, key)
 
     /** Blank falls back to the engine's own default, so only the open-ended ones need typing into. */
     fun getEngineModel(engine: TranscriptionEngine): String {
@@ -121,9 +162,9 @@ class PreferencesManager private constructor(context: Context) {
         prefs.edit().putString("engine_model_${engine.name}", model.trim()).apply()
     }
 
-    fun getGroqApiKey(): String = getEngineKey(TranscriptionEngine.GROQ)
+    fun getGroqApiKey(): String = getProviderKey(Provider.GROQ)
 
-    fun setGroqApiKey(key: String) = setEngineKey(TranscriptionEngine.GROQ, key)
+    fun setGroqApiKey(key: String) = setProviderKey(Provider.GROQ, key)
 
     // ---- spoken language ------------------------------------------------
     //
@@ -230,27 +271,14 @@ class PreferencesManager private constructor(context: Context) {
         _textProviderFlow.value = provider
     }
 
-    fun getTextApiKey(): String {
-        val provider = getTextProvider()
-        return if (provider.usesGeminiKey) getEffectiveApiKey()
-        else prefs.getString("text_key_${provider.name}", "") ?: ""
-    }
+    fun getTextApiKey(): String = getProviderKey(getTextProvider().provider)
 
-    fun setTextApiKey(key: String) {
-        prefs.edit().putString("text_key_${getTextProvider().name}", key.trim()).apply()
-        _textKeyFlow.value = key.trim()
-    }
+    fun setTextApiKey(key: String) = setProviderKey(getTextProvider().provider, key)
 
     /** Blank falls back to the provider's own, so only CUSTOM ever needs typing into. */
-    fun getTextBaseUrl(): String {
-        val provider = getTextProvider()
-        val stored = prefs.getString("text_base_${provider.name}", "") ?: ""
-        return stored.ifBlank { provider.baseUrl }
-    }
+    fun getTextBaseUrl(): String = getProviderBaseUrl(getTextProvider().provider)
 
-    fun setTextBaseUrl(url: String) {
-        prefs.edit().putString("text_base_${getTextProvider().name}", url.trim()).apply()
-    }
+    fun setTextBaseUrl(url: String) = setProviderBaseUrl(getTextProvider().provider, url)
 
     fun getTextModel(): String {
         val provider = getTextProvider()

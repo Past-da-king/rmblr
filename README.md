@@ -87,9 +87,14 @@ Transcription is a choice between three engines, in Settings.
 | **Gemini Transcribe Live** (default) | Built for this one job. Words appear while you speak, and it answers in text rather than speech — so no spoken reply is generated, waited for, or billed. | No |
 | **Gemini Flash Lite** | Cheap and accurate, handles switching languages mid-sentence, and the one to pick when you want a tone. | Yes |
 | **Gemini Live** | The previous streaming model, kept so nobody's choice vanishes. It generates a spoken answer that is thrown away unheard and billed anyway. | No |
-| **Groq Whisper** | Fast and free to start. It is Whisper, so it is strong in one language and weaker across two. | Yes |
-| **Mistral Voxtral** | Mistral's own transcriber, strong across European languages. Needs a Mistral key. | Yes |
-| **OpenRouter** | One key reaching Voxtral, GPT-4o Transcribe, Whisper and the rest. Name whichever model you want. | Yes |
+| **Groq** | Whisper Large v3 Turbo, Whisper Large v3, or Distil-Whisper. Fast and free to start, but Whisper is weaker across two languages in one sentence. | Yes |
+| **Mistral** | Voxtral, Mistral's own transcriber, strong across European languages. | Yes |
+| **OpenAI** | GPT-4o Transcribe, GPT-4o Mini Transcribe, or Whisper. | Yes |
+| **OpenRouter** | One key reaching all of the above and more. Name whichever model you want. | Yes |
+| **Anything OpenAI-compatible** | Your own base URL and model — a self-hosted Whisper, a company gateway, anything answering `/audio/transcriptions`. | Yes |
+
+A key belongs to a provider and is entered once: the same Mistral key does your dictating
+and your translating.
 
 Transcription is not the part that needs a large model, so the default is the cheapest
 one that does the job well. If it is out of quota the client walks down a fallback

@@ -42,10 +42,13 @@ import java.util.concurrent.TimeUnit
  *    opposite: it rejects AUDIO, generates no reply at all, and simply returns the
  *    transcript. Either way the words come from `inputAudioTranscription`, which
  *    transcribes what YOU said rather than what the model wants to answer.
- *  - We deliberately do NOT wait for `turnComplete`. That flag means the model has
- *    finished generating the spoken answer we are throwing away, which can take
- *    seconds. Once the input transcript has gone quiet for [QUIET_MS] after the audio
- *    ended, everything we asked for has arrived and the socket can go.
+ *  - Completion flags are only meaningful AFTER the microphone is released. The server
+ *    runs its own voice detection and closes a "turn" every time you pause for breath,
+ *    so `turnComplete` and `generationComplete` arrive mid-dictation and mean nothing
+ *    about whether you have finished talking. What ends the session is the input
+ *    transcript going quiet for [QUIET_MS] once the audio has actually stopped.
+ *  - The transcript arrives one utterance at a time rather than as a running delta:
+ *    each pause produces its own complete sentence, which is why they are appended.
  */
 class LiveTranscriptionSession(
     apiKey: String,
@@ -79,6 +82,7 @@ class LiveTranscriptionSession(
     @Volatile private var ended = false
     @Volatile private var turnDone = false
     @Volatile private var lastDeltaAt = 0L
+    @Volatile private var endedAt = 0L
     @Volatile private var failure: Throwable? = null
 
     private val socket: WebSocket
@@ -123,13 +127,30 @@ class LiveTranscriptionSession(
                 val server = json.optJSONObject("serverContent") ?: return
                 server.optJSONObject("inputTranscription")?.optString("text")?.let { delta ->
                     if (delta.isNotEmpty()) {
-                        synchronized(transcript) { transcript.append(delta) }
+                        synchronized(transcript) {
+                            // Each pause produces its own finished sentence rather than a
+                            // running word-by-word delta, so two of them butt straight up
+                            // against each other: "...the skill.Hello, this is...". Only
+                            // a completed sentence meeting a new word gets a space, which
+                            // leaves genuine mid-word deltas alone.
+                            val tail = transcript.lastOrNull()
+                            if (tail != null && tail in SENTENCE_ENDINGS && delta.first().isLetterOrDigit()) {
+                                transcript.append(' ')
+                            }
+                            transcript.append(delta)
+                        }
                         lastDeltaAt = System.currentTimeMillis()
                         _text.value = synchronized(transcript) { transcript.toString() }
                     }
                 }
 
-                if (server.optBoolean("turnComplete") || server.optBoolean("generationComplete")) {
+                // A completion flag BEFORE you let go does not mean the dictation is
+                // over — it means the server's voice detection noticed you paused for
+                // breath. Latching it there was the bug that threw away everything said
+                // after a pause: the flag was set mid-sentence, and the moment the mic
+                // was released the settle loop saw it and finished with half a
+                // transcript while the rest was still in flight.
+                if (ended && (server.optBoolean("turnComplete") || server.optBoolean("generationComplete"))) {
                     turnDone = true
                 }
             }
@@ -170,6 +191,7 @@ class LiveTranscriptionSession(
     suspend fun finish(): Result<String> {
         if (ended) return settled.await()
         ended = true
+        endedAt = System.currentTimeMillis()
 
         val tail = synchronized(carry) {
             val rest = carry.toByteArray()
@@ -183,10 +205,21 @@ class LiveTranscriptionSession(
             val startedWaiting = System.currentTimeMillis()
             while (true) {
                 val heard = synchronized(transcript) { transcript.toString().trim() }
-                val quietFor = System.currentTimeMillis() - lastDeltaAt
+
+                // Quiet is measured from the LATER of the last transcript and the moment
+                // the microphone was released — never from the last transcript alone.
+                // Pause for three seconds mid-dictation and the last delta is already
+                // ancient by the time you let go, so a plain "has it been quiet for
+                // 600ms" test is satisfied instantly and settles before the closing
+                // utterance has had any chance to arrive. That is the same lost tail,
+                // reached by a different route.
+                val quietFor = System.currentTimeMillis() - maxOf(lastDeltaAt, endedAt)
                 val waited = System.currentTimeMillis() - startedWaiting
 
-                val done = turnDone ||
+                // Even a completion that arrives after the mic is released gets a
+                // moment's grace, because the transcript for the last utterance and the
+                // flag that closes it can land in either order.
+                val done = (turnDone && quietFor > SETTLE_GRACE_MS) ||
                     (heard.isNotEmpty() && lastDeltaAt > 0L && quietFor > QUIET_MS) ||
                     waited > MAX_WAIT_MS
 
@@ -289,6 +322,18 @@ class LiveTranscriptionSession(
          * not truncate anything, short enough to be invisible.
          */
         private const val QUIET_MS = 600L
+
+        /**
+         * How long to keep listening after the server says it has finished.
+         *
+         * Measured, not guessed: streaming ten seconds of speech with a pause in the
+         * middle, the closing transcript arrived roughly 400ms AFTER the audio ended and
+         * its completion flag came alongside it. Settling the instant a flag appears
+         * loses that last utterance.
+         */
+        private const val SETTLE_GRACE_MS = 350L
+
+        private val SENTENCE_ENDINGS = charArrayOf('.', '!', '?', ',', ':', ';')
 
         /** Ceiling on the tail wait only — not on the recording, which has no limit. */
         private const val MAX_WAIT_MS = 8_000L

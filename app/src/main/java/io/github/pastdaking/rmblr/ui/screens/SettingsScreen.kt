@@ -11,6 +11,7 @@ import io.github.pastdaking.rmblr.ui.components.SheetOption
 import io.github.pastdaking.rmblr.ui.components.SheetOptions
 import io.github.pastdaking.rmblr.ui.components.LanguageEntry
 import io.github.pastdaking.rmblr.data.SUGGESTED_LANGUAGES
+import io.github.pastdaking.rmblr.data.Provider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -105,8 +106,7 @@ private enum class SettingsGroup(
     val blurb: String,
     val icon: ImageVector
 ) {
-    VOICE("Models & keys", "What does the listening, and the keys it uses", Icons.Default.RecordVoiceOver),
-    TRANSLATION("Translation", "Which model translates, and into what", Icons.Default.Translate),
+    VOICE("Models & keys", "Who does the listening and the translating, and their keys", Icons.Default.RecordVoiceOver),
     APPEARANCE("Appearance", "Light, dark, OLED black, wallpaper colours", Icons.Default.Palette),
     TYPING("Typing", "Vibration and capitalisation", Icons.Default.Keyboard)
 }
@@ -166,7 +166,6 @@ fun SettingsScreen(
 
             when (group) {
                 SettingsGroup.VOICE -> VoiceSettings(prefsManager)
-                SettingsGroup.TRANSLATION -> TranslationSettings(prefsManager)
                 SettingsGroup.APPEARANCE -> AppearanceSettings()
                 SettingsGroup.TYPING -> TypingSettings(prefsManager)
             }
@@ -204,97 +203,94 @@ private fun GroupRow(group: SettingsGroup, onClick: () -> Unit) {
 // ---------------------------------------------------------------- models & keys
 
 /** Which sheet is open, if any. One at a time, by construction. */
-private enum class OpenSheet { ENGINE, KEY, LANGUAGE, TARGET, PROVIDER, PROVIDER_KEY }
+private enum class OpenSheet { DICTATION, TRANSLATION, LANGUAGE, TARGET }
 
+/**
+ * One page for every model decision in the app.
+ *
+ * Dictation and translation had a page each, and they were the same page: pick a
+ * provider, paste a key, pick a model. Two screens asking the identical question is a
+ * sign the split was invented rather than found, so they are one screen with two rows.
+ *
+ * The keys underneath them are now per PROVIDER rather than per feature, which is what
+ * makes the merge worth doing — one Mistral key serves the dictating and the translating,
+ * and choosing a different provider never disturbs the key you already pasted for the
+ * last one.
+ */
 @Composable
 private fun VoiceSettings(prefsManager: PreferencesManager) {
-    val scope = rememberCoroutineScope()
-
-    val userApiKey by prefsManager.apiKeyFlow.collectAsState()
-    val selectedModel by prefsManager.modelFlow.collectAsState()
     val engine by prefsManager.engineFlow.collectAsState()
-    val providerKey by prefsManager.groqKeyFlow.collectAsState()
+    val textProvider by prefsManager.textProviderFlow.collectAsState()
     val language by prefsManager.languageFlow.collectAsState()
+    val target by prefsManager.translateTargetFlow.collectAsState()
+    // Re-read the keys whenever anything about them changes, so "Connected" is honest.
+    val geminiKey by prefsManager.apiKeyFlow.collectAsState()
+    val providerKey by prefsManager.groqKeyFlow.collectAsState()
 
     var sheet by remember { mutableStateOf<OpenSheet?>(null) }
-    var isTesting by remember { mutableStateOf(false) }
-    var testResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
 
-    // Only the key the SELECTED engine actually uses is ever shown. Leaving the Gemini
-    // field on screen after picking Mistral, with a second box underneath it, was the
-    // most confusing thing on this page.
-    val usesOwnKey = engine.needsGroqKey
-    val keyInUse = if (usesOwnKey) providerKey else prefsManager.getEffectiveApiKey()
-    val keyLabel = if (usesOwnKey) "${engine.label} key" else "Gemini key"
+    val dictationReady = prefsManager.getProviderKey(engine.provider).isNotBlank()
+    val translationReady = prefsManager.getProviderKey(textProvider.provider).isNotBlank()
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
         ValueRow(
-            label = "Engine",
+            label = "Dictation",
             value = engine.label,
-            supporting = engine.blurb,
-            onClick = { sheet = OpenSheet.ENGINE }
+            supporting = "${engine.provider.label}${if (dictationReady) "" else " — key needed"}",
+            valueTint = if (dictationReady) Accent else Alert,
+            onClick = { sheet = OpenSheet.DICTATION }
         )
         ValueRow(
-            label = keyLabel,
-            value = if (keyInUse.isNotBlank()) "Connected" else "Not set",
-            valueTint = if (keyInUse.isNotBlank()) Good else Accent,
-            onClick = { sheet = OpenSheet.KEY }
+            label = "Translation",
+            value = textProvider.label,
+            supporting = "${textProvider.provider.label}${if (translationReady) "" else " — key needed"}",
+            valueTint = if (translationReady) Accent else Alert,
+            onClick = { sheet = OpenSheet.TRANSLATION }
         )
         ValueRow(
             label = "Language you speak",
             value = language.ifBlank { "Auto" },
-            supporting = "Leave it on auto unless you are being transcribed into the wrong language.",
             onClick = { sheet = OpenSheet.LANGUAGE }
+        )
+        ValueRow(
+            label = "Translate into",
+            value = target,
+            onClick = { sheet = OpenSheet.TARGET }
         )
     }
 
     when (sheet) {
-        OpenSheet.ENGINE -> RmblrSheet("What does the listening", { sheet = null }) {
-            SheetOptions {
-                TranscriptionEngine.values().forEach { option ->
-                    SheetOption(
-                        title = option.label,
-                        supporting = option.blurb,
-                        selected = engine == option,
-                        onClick = {
-                            prefsManager.setEngine(option)
-                            testResult = null
-                            sheet = null
-                        }
-                    )
-                }
-            }
-        }
+        OpenSheet.DICTATION -> ModelSheet(
+            title = "What does the listening",
+            prefsManager = prefsManager,
+            providers = TranscriptionEngine.values().map { it.provider }.distinct(),
+            selectedProvider = engine.provider,
+            modelsFor = { p -> TranscriptionEngine.values().filter { it.provider == p }
+                .map { ModelChoice(it.label, it.blurb, it == engine) { prefsManager.setEngine(it) } } },
+            editableModelValue = { p ->
+                TranscriptionEngine.values().firstOrNull { it.provider == p && p.editableModel }
+                    ?.let { prefsManager.getEngineModel(it) }
+            },
+            onEditableModelChange = { p, value ->
+                TranscriptionEngine.values().firstOrNull { it.provider == p }
+                    ?.let { prefsManager.setEngineModel(it, value) }
+            },
+            onDismiss = { sheet = null }
+        )
 
-        OpenSheet.KEY -> RmblrSheet(keyLabel, { sheet = null }) {
-            KeySheet(
-                key = keyInUse,
-                onKeyChange = {
-                    if (usesOwnKey) prefsManager.setEngineKey(engine, it) else prefsManager.setUserApiKey(it)
-                },
-                placeholder = if (usesOwnKey) "${engine.label} API key" else "AIzaSy...",
-                model = if (engine.editableModel) prefsManager.getEngineModel(engine) else null,
-                modelPlaceholder = engine.id,
-                onModelChange = { prefsManager.setEngineModel(engine, it) },
-                note = keyNoteFor(engine),
-                testing = isTesting,
-                result = testResult,
-                onTest = {
-                    isTesting = true
-                    testResult = null
-                    scope.launch {
-                        val res = if (usesOwnKey) {
-                            SpeechToTextClient.testConnection(engine.baseUrl, prefsManager.getEngineKey(engine), engine.label)
-                        } else {
-                            GeminiApiClient.testConnection(prefsManager.getEffectiveApiKey(), selectedModel)
-                        }
-                        isTesting = false
-                        res.onSuccess { testResult = true to it }
-                            .onFailure { testResult = false to (it.message ?: "Could not reach it.") }
-                    }
-                }
-            )
-        }
+        OpenSheet.TRANSLATION -> ModelSheet(
+            title = "What does the translating",
+            prefsManager = prefsManager,
+            providers = TextProvider.values().map { it.provider }.distinct(),
+            selectedProvider = textProvider.provider,
+            modelsFor = { p -> TextProvider.values().filter { it.provider == p }
+                .map { ModelChoice(it.label, it.blurb, it == textProvider) { prefsManager.setTextProvider(it) } } },
+            editableModelValue = { p ->
+                if (p.editableModel) prefsManager.getTextModel() else null
+            },
+            onEditableModelChange = { _, value -> prefsManager.setTextModel(value) },
+            onDismiss = { sheet = null }
+        )
 
         OpenSheet.LANGUAGE -> RmblrSheet("Language you speak", { sheet = null }) {
             LanguageEntry(
@@ -312,67 +308,149 @@ private fun VoiceSettings(prefsManager: PreferencesManager) {
             )
         }
 
+        OpenSheet.TARGET -> RmblrSheet("Translate into", { sheet = null }) {
+            LanguageEntry(
+                value = target,
+                onValueChange = { prefsManager.setTranslateTarget(it) },
+                suggestions = SUGGESTED_LANGUAGES,
+                placeholder = "English"
+            )
+        }
+
         else -> Unit
     }
 }
 
-private fun keyNoteFor(engine: TranscriptionEngine): String = when (engine) {
-    TranscriptionEngine.GROQ ->
-        "Free from console.groq.com. Groq runs Whisper: quick and accurate in one language, " +
-            "but the model that struggles when you switch languages mid-sentence."
-    TranscriptionEngine.MISTRAL_VOXTRAL ->
-        "From console.mistral.ai. Voxtral is Mistral's own transcriber, strong across European " +
-            "languages. Leave the model blank for voxtral-mini-latest."
-    TranscriptionEngine.OPENROUTER_STT ->
-        "From openrouter.ai. One key reaches Voxtral, GPT-4o Transcribe, Whisper and the rest — " +
-            "name whichever you want, or leave it blank for the default."
-    else ->
-        "Free from Google AI Studio. The key is stored on this device and calls Google directly."
+/** One selectable model inside the sheet. */
+private data class ModelChoice(
+    val label: String,
+    val blurb: String,
+    val selected: Boolean,
+    val select: () -> Unit
+)
+
+/**
+ * Provider at the top, its key under that, its models at the bottom.
+ *
+ * Choosing a model used to be two trips — one sheet to pick the provider, another to
+ * find the key — and switching provider left the previous provider's key sitting on
+ * screen underneath a second empty box. Here the three things arrive together in the
+ * order you need them, and tapping a different provider swaps the key field to that
+ * provider's key rather than clearing anything: pasted keys stay pasted.
+ */
+@Composable
+private fun ModelSheet(
+    title: String,
+    prefsManager: PreferencesManager,
+    providers: List<Provider>,
+    selectedProvider: Provider,
+    modelsFor: (Provider) -> List<ModelChoice>,
+    editableModelValue: (Provider) -> String?,
+    onEditableModelChange: (Provider, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // Which provider's shelf you are LOOKING at, which is not the same as the one in
+    // use — you can browse Mistral's models without abandoning Gemini until you tap one.
+    var viewing by remember(selectedProvider) { mutableStateOf(selectedProvider) }
+
+    RmblrSheet(title, onDismiss) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+        ) {
+            providers.forEach { p ->
+                val on = viewing == p
+                Text(
+                    text = p.label,
+                    color = if (on) OnAccent else TextMid,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier
+                        .pressable(onClick = { viewing = p })
+                        .clip(RoundedCornerShape(Radius.pill))
+                        .background(if (on) Accent else Raised)
+                        .padding(horizontal = Space.lg, vertical = Space.md)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(Space.lg))
+
+        ProviderKeyField(prefsManager, viewing)
+
+        // Only the do-it-yourself provider has an address worth typing; every other one
+        // already knows where it lives.
+        if (viewing == Provider.CUSTOM) {
+            Spacer(Modifier.height(Space.md))
+            var baseInput by remember(viewing) { mutableStateOf(prefsManager.getProviderBaseUrl(viewing)) }
+            OutlinedTextField(
+                value = baseInput,
+                onValueChange = { baseInput = it; prefsManager.setProviderBaseUrl(viewing, it) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(Radius.control),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                colors = fieldColors(),
+                placeholder = {
+                    Text("https://api.example.com/v1", color = TextLow, style = MaterialTheme.typography.bodyMedium)
+                }
+            )
+        }
+
+        val editable = editableModelValue(viewing)
+        if (editable != null) {
+            Spacer(Modifier.height(Space.md))
+            var modelInput by remember(viewing) { mutableStateOf(editable) }
+            OutlinedTextField(
+                value = modelInput,
+                onValueChange = { modelInput = it; onEditableModelChange(viewing, it) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(Radius.control),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                colors = fieldColors(),
+                placeholder = { Text("model name", color = TextLow, style = MaterialTheme.typography.bodyMedium) }
+            )
+        }
+
+        Spacer(Modifier.height(Space.md))
+        Text(viewing.note, color = TextMid, style = MaterialTheme.typography.bodySmall)
+
+        Spacer(Modifier.height(Space.xl))
+        SectionLabel("${viewing.label} models")
+
+        SheetOptions {
+            modelsFor(viewing).forEach { choice ->
+                SheetOption(
+                    title = choice.label,
+                    supporting = choice.blurb,
+                    selected = choice.selected,
+                    onClick = { choice.select(); onDismiss() }
+                )
+            }
+        }
+    }
 }
 
-/** The key sheet, shared by dictation and translation because they need the same four things. */
+/** The key for one provider, entered once and used by everything that provider does. */
 @Composable
-private fun KeySheet(
-    key: String,
-    onKeyChange: (String) -> Unit,
-    placeholder: String,
-    model: String?,
-    modelPlaceholder: String,
-    onModelChange: (String) -> Unit,
-    note: String,
-    testing: Boolean,
-    result: Pair<Boolean, String>?,
-    onTest: (() -> Unit)?
-) {
-    var input by remember(key) { mutableStateOf(key) }
-    var modelInput by remember(model) { mutableStateOf(model.orEmpty()) }
+private fun ProviderKeyField(prefsManager: PreferencesManager, provider: Provider) {
+    val scope = rememberCoroutineScope()
+    var input by remember(provider) { mutableStateOf(prefsManager.getProviderKey(provider)) }
     var reveal by remember { mutableStateOf(false) }
+    var testing by remember(provider) { mutableStateOf(false) }
+    var result by remember(provider) { mutableStateOf<Pair<Boolean, String>?>(null) }
 
     OutlinedTextField(
         value = input,
-        onValueChange = { input = it; onKeyChange(it) },
+        onValueChange = { input = it; prefsManager.setProviderKey(provider, it) },
         visualTransformation = if (reveal) VisualTransformation.None else PasswordVisualTransformation(),
         modifier = Modifier.fillMaxWidth().testTag("api_key_input"),
         shape = RoundedCornerShape(Radius.control),
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyMedium,
         colors = fieldColors(),
-        placeholder = { Text(placeholder, color = TextLow, style = MaterialTheme.typography.bodyMedium) }
+        placeholder = { Text(provider.keyHint, color = TextLow, style = MaterialTheme.typography.bodyMedium) }
     )
-
-    if (model != null) {
-        Spacer(Modifier.height(Space.md))
-        OutlinedTextField(
-            value = modelInput,
-            onValueChange = { modelInput = it; onModelChange(it) },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(Radius.control),
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium,
-            colors = fieldColors(),
-            placeholder = { Text(modelPlaceholder, color = TextLow, style = MaterialTheme.typography.bodyMedium) }
-        )
-    }
 
     Spacer(Modifier.height(Space.md))
 
@@ -388,139 +466,39 @@ private fun KeySheet(
             modifier = Modifier.clickable { reveal = !reveal }
         )
 
-        if (onTest != null) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(Radius.pill))
-                    .background(Raised)
-                    .clickable(enabled = !testing, onClick = onTest)
-                    .padding(horizontal = Space.lg, vertical = Space.md)
-            ) {
-                if (testing) {
-                    CircularProgressIndicator(color = Accent, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(Space.sm))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(Radius.pill))
+                .background(Raised)
+                .clickable(enabled = !testing) {
+                    testing = true
+                    result = null
+                    scope.launch {
+                        val key = prefsManager.getProviderKey(provider)
+                        val res = if (provider.needsKey) {
+                            SpeechToTextClient.testConnection(provider.baseUrl, key, provider.label)
+                        } else {
+                            GeminiApiClient.testConnection(key)
+                        }
+                        testing = false
+                        res.onSuccess { result = true to it }
+                            .onFailure { result = false to (it.message ?: "Could not reach it.") }
+                    }
                 }
-                Text("Test connection", color = TextHigh, style = MaterialTheme.typography.labelLarge)
+                .padding(horizontal = Space.lg, vertical = Space.md)
+        ) {
+            if (testing) {
+                CircularProgressIndicator(color = Accent, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(Space.sm))
             }
+            Text("Test connection", color = TextHigh, style = MaterialTheme.typography.labelLarge)
         }
     }
 
     result?.let { (ok, msg) ->
         Spacer(Modifier.height(Space.md))
         Text(msg, color = if (ok) Good else Alert, style = MaterialTheme.typography.bodySmall)
-    }
-
-    Spacer(Modifier.height(Space.lg))
-    Text(note, color = TextMid, style = MaterialTheme.typography.bodySmall)
-}
-
-// ---------------------------------------------------------------- translation
-
-@Composable
-private fun TranslationSettings(prefsManager: PreferencesManager) {
-    val target by prefsManager.translateTargetFlow.collectAsState()
-    val provider by prefsManager.textProviderFlow.collectAsState()
-    val textKey by prefsManager.textKeyFlow.collectAsState()
-
-    var sheet by remember { mutableStateOf<OpenSheet?>(null) }
-    var baseUrlInput by remember(provider) { mutableStateOf(prefsManager.getTextBaseUrl()) }
-
-    val keyInUse = if (provider.usesGeminiKey) prefsManager.getEffectiveApiKey() else textKey
-
-    Text(
-        text = "Switching translation on lives on the main page. This is where you say who does it.",
-        color = TextMid,
-        style = MaterialTheme.typography.bodySmall
-    )
-
-    Spacer(Modifier.height(Space.xl))
-
-    // Deliberately the same three rows, in the same order, as Models & keys. The two
-    // pages answer the same shape of question and should not look like different apps.
-    Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
-        ValueRow(
-            label = "Provider",
-            value = provider.label,
-            supporting = provider.blurb,
-            onClick = { sheet = OpenSheet.PROVIDER }
-        )
-        ValueRow(
-            label = if (provider.usesGeminiKey) "Gemini key" else "${provider.label} key",
-            value = if (keyInUse.isNotBlank()) "Connected" else "Not set",
-            valueTint = if (keyInUse.isNotBlank()) Good else Accent,
-            onClick = { sheet = OpenSheet.PROVIDER_KEY }
-        )
-        ValueRow(
-            label = "Translate into",
-            value = target,
-            onClick = { sheet = OpenSheet.TARGET }
-        )
-    }
-
-    when (sheet) {
-        OpenSheet.PROVIDER -> RmblrSheet("Which model translates", { sheet = null }) {
-            SheetOptions {
-                TextProvider.values().forEach { option ->
-                    SheetOption(
-                        title = option.label,
-                        supporting = option.blurb,
-                        selected = provider == option,
-                        onClick = { prefsManager.setTextProvider(option); sheet = null }
-                    )
-                }
-            }
-        }
-
-        OpenSheet.PROVIDER_KEY -> RmblrSheet(
-            if (provider.usesGeminiKey) "Gemini key" else "${provider.label} key",
-            { sheet = null }
-        ) {
-            KeySheet(
-                key = keyInUse,
-                onKeyChange = {
-                    if (provider.usesGeminiKey) prefsManager.setUserApiKey(it) else prefsManager.setTextApiKey(it)
-                },
-                placeholder = if (provider.usesGeminiKey) "AIzaSy..." else "${provider.label} API key",
-                model = if (provider.editable) prefsManager.getTextModel() else null,
-                modelPlaceholder = provider.defaultModel.ifBlank { "model name" },
-                onModelChange = { prefsManager.setTextModel(it) },
-                note = if (provider.editable)
-                    "Anything speaking the OpenAI chat-completions API works, including a server on " +
-                        "your own machine. Give the base URL up to and including /v1."
-                else provider.blurb,
-                testing = false,
-                result = null,
-                onTest = null
-            )
-
-            if (provider.editable) {
-                Spacer(Modifier.height(Space.md))
-                OutlinedTextField(
-                    value = baseUrlInput,
-                    onValueChange = { baseUrlInput = it; prefsManager.setTextBaseUrl(it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(Radius.control),
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                    colors = fieldColors(),
-                    placeholder = {
-                        Text("https://api.example.com/v1", color = TextLow, style = MaterialTheme.typography.bodyMedium)
-                    }
-                )
-            }
-        }
-
-        OpenSheet.TARGET -> RmblrSheet("Translate into", { sheet = null }) {
-            LanguageEntry(
-                value = target,
-                onValueChange = { prefsManager.setTranslateTarget(it) },
-                suggestions = SUGGESTED_LANGUAGES,
-                placeholder = "English"
-            )
-        }
-
-        else -> Unit
     }
 }
 

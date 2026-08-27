@@ -33,12 +33,8 @@ enum class TranscriptionEngine(
     val supportsTone: Boolean,
     /** Does audio go up while you are still speaking, rather than after you stop? */
     val streams: Boolean,
-    /** Needs its own key, separate from the Gemini one. */
-    val needsGroqKey: Boolean = false,
-    /** Where its OpenAI-shaped /audio/transcriptions endpoint lives. Blank for Gemini. */
-    val baseUrl: String = "",
-    /** Providers that front many models let you name the one you want. */
-    val editableModel: Boolean = false
+    /** Who this model belongs to. The key and the base URL live there, not here. */
+    val provider: Provider = Provider.GEMINI
 ) {
     GEMINI_TRANSCRIBE_LIVE(
         id = "gemini-3.5-transcribe-live",
@@ -64,31 +60,73 @@ enum class TranscriptionEngine(
     GROQ(
         id = "whisper-large-v3-turbo",
         label = "Groq Whisper",
-        blurb = "Very fast and free to start, but it is Whisper: strong on English, weaker when you switch languages mid-sentence. Needs a Groq key.",
+        blurb = "Fast and free to start, but it is Whisper: strong on English, weaker when you switch languages mid-sentence.",
         supportsTone = true,
         streams = false,
-        needsGroqKey = true,
-        baseUrl = "https://api.groq.com/openai/v1"
+    ),
+    GROQ_WHISPER_LARGE(
+        id = "whisper-large-v3",
+        label = "Whisper Large v3",
+        blurb = "The full-size Whisper. Slower than turbo, a little more careful.",
+        supportsTone = true,
+        streams = false,
+        provider = Provider.GROQ
+    ),
+    GROQ_DISTIL(
+        id = "distil-whisper-large-v3-en",
+        label = "Distil-Whisper (English only)",
+        blurb = "The quickest thing here by some way, and English only. Nothing else.",
+        supportsTone = true,
+        streams = false,
+        provider = Provider.GROQ
     ),
     MISTRAL_VOXTRAL(
         id = "voxtral-mini-latest",
         label = "Mistral Voxtral",
-        blurb = "Mistral's own transcriber. Strong across European languages, and priced to be used. Needs a Mistral key.",
+        blurb = "Mistral's own transcriber. Strong across European languages, and priced to be used.",
         supportsTone = true,
         streams = false,
-        needsGroqKey = true,
-        baseUrl = "https://api.mistral.ai/v1",
-        editableModel = true
+        provider = Provider.MISTRAL,
+    ),
+    OPENAI_MINI_TRANSCRIBE(
+        id = "gpt-4o-mini-transcribe",
+        label = "GPT-4o Mini Transcribe",
+        blurb = "OpenAI's cheap transcriber. Quick, and good on clear English.",
+        supportsTone = true,
+        streams = false,
+        provider = Provider.OPENAI
+    ),
+    OPENAI_TRANSCRIBE(
+        id = "gpt-4o-transcribe",
+        label = "GPT-4o Transcribe",
+        blurb = "The larger one. Better on accents and noise, and priced like it.",
+        supportsTone = true,
+        streams = false,
+        provider = Provider.OPENAI
+    ),
+    OPENAI_WHISPER(
+        id = "whisper-1",
+        label = "Whisper",
+        blurb = "OpenAI's original. Still solid, and the cheapest of their three.",
+        supportsTone = true,
+        streams = false,
+        provider = Provider.OPENAI
+    ),
+    CUSTOM_STT(
+        id = "",
+        label = "Anything OpenAI-compatible",
+        blurb = "Your own base URL and model — a self-hosted Whisper, a company gateway, anything that answers /audio/transcriptions.",
+        supportsTone = true,
+        streams = false,
+        provider = Provider.CUSTOM
     ),
     OPENROUTER_STT(
         id = "openai/gpt-4o-mini-transcribe",
         label = "OpenRouter",
-        blurb = "One key, many transcribers — Voxtral, GPT-4o Transcribe, Whisper. Name whichever model you want. Needs an OpenRouter key.",
+        blurb = "Name any transcriber OpenRouter carries — Voxtral, GPT-4o Transcribe, Whisper.",
         supportsTone = true,
         streams = false,
-        needsGroqKey = true,
-        baseUrl = "https://openrouter.ai/api/v1",
-        editableModel = true
+        provider = Provider.OPENROUTER,
     );
 
     /**
@@ -99,6 +137,13 @@ enum class TranscriptionEngine(
      * refuses AUDIO outright and returns nothing but the transcript.
      */
     val textOnly: Boolean get() = this == GEMINI_TRANSCRIBE_LIVE
+
+    /** Everything that is not Gemini goes out over the shared OpenAI-shaped client. */
+    val needsGroqKey: Boolean get() = provider.needsKey
+
+    val baseUrl: String get() = provider.baseUrl
+
+    val editableModel: Boolean get() = provider.editableModel
 
     companion object {
         val DEFAULT = GEMINI_TRANSCRIBE_LIVE

@@ -8,6 +8,8 @@ import io.github.pastdaking.rmblr.data.DictionaryEntry
 import io.github.pastdaking.rmblr.data.DictionaryRepository
 import io.github.pastdaking.rmblr.ui.components.pressable
 import io.github.pastdaking.rmblr.ui.theme.OnAccent
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.core.os.ConfigurationCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -354,8 +356,14 @@ fun HistoryCard(
     onCopy: (String) -> Unit,
     onDelete: () -> Unit
 ) {
-    val formatter = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
-    val dateStr = formatter.format(Date(item.timestamp))
+    // Locale.getDefault() is not observable state, so a composable that reads it keeps
+    // formatting dates in the old locale after the user changes theirs. The
+    // configuration IS observable, so this recomposes when the phone's language does.
+    val configuration = LocalConfiguration.current
+    val dateStr = remember(configuration, item.timestamp) {
+        val locale = ConfigurationCompat.getLocales(configuration)[0] ?: Locale.ROOT
+        SimpleDateFormat("MMM d, HH:mm", locale).format(Date(item.timestamp))
+    }
     val label = if (item.mode == TranscriptionMode.POST_PROCESS_CLEANUP) item.preset.displayName else "Verbatim"
 
     Panel {

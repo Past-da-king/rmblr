@@ -19,51 +19,55 @@ enum class TextProvider(
     val baseUrl: String,
     val defaultModel: String,
     val blurb: String,
-    /** Gemini reuses the key already in Settings; everything else brings its own. */
-    val usesGeminiKey: Boolean = false,
-    val editable: Boolean = false
+    /** Who this model belongs to, so the key is shared with dictation. */
+    val provider: Provider = Provider.GEMINI
 ) {
     GEMINI(
         label = "Gemini",
         baseUrl = "",
         defaultModel = "gemini-3.5-flash-lite",
         blurb = "Uses the Gemini key you already have. Best on African languages.",
-        usesGeminiKey = true
+        provider = Provider.GEMINI
     ),
     MISTRAL(
         label = "Mistral",
         baseUrl = "https://api.mistral.ai/v1",
         defaultModel = "mistral-small-latest",
-        blurb = "Strong and cheap across European languages."
+        blurb = "Strong and cheap across European languages.",
+        provider = Provider.MISTRAL
     ),
     OPENROUTER(
         label = "OpenRouter",
         baseUrl = "https://openrouter.ai/api/v1",
         defaultModel = "mistralai/mistral-small",
         blurb = "One key, hundreds of models. Set the model name yourself.",
-        editable = true
+        provider = Provider.OPENROUTER
     ),
     GROQ_TEXT(
         label = "Groq",
         baseUrl = "https://api.groq.com/openai/v1",
         defaultModel = "llama-3.3-70b-versatile",
         blurb = "The fastest of these by a distance.",
-        editable = true
+        provider = Provider.GROQ
     ),
     OPENAI(
         label = "OpenAI",
         baseUrl = "https://api.openai.com/v1",
         defaultModel = "gpt-4o-mini",
         blurb = "Works if that is the key you already pay for.",
-        editable = true
+        provider = Provider.OPENAI
     ),
     CUSTOM(
         label = "Anything OpenAI-compatible",
         baseUrl = "",
         defaultModel = "",
         blurb = "Your own base URL and model. Works with a local server too.",
-        editable = true
+        provider = Provider.CUSTOM
     );
+
+    val usesGeminiKey: Boolean get() = !provider.needsKey
+
+    val editable: Boolean get() = provider.editableModel
 
     companion object {
         val DEFAULT = GEMINI
