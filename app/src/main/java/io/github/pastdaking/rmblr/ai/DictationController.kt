@@ -2,7 +2,9 @@ package io.github.pastdaking.rmblr.ai
 
 import io.github.pastdaking.rmblr.audio.AudioRecorderManager
 import io.github.pastdaking.rmblr.data.DictionaryRepository
+import io.github.pastdaking.rmblr.data.HistoryRepository
 import io.github.pastdaking.rmblr.data.PreferencesManager
+import io.github.pastdaking.rmblr.data.Provider
 import io.github.pastdaking.rmblr.data.TranscriptionEngine
 import io.github.pastdaking.rmblr.data.TranscriptionMode
 import io.github.pastdaking.rmblr.data.CleanupPreset
@@ -22,7 +24,8 @@ import kotlinx.coroutines.flow.asStateFlow
 class DictationController(
     private val prefs: PreferencesManager,
     private val recorder: AudioRecorderManager,
-    private val dictionary: DictionaryRepository? = null
+    private val dictionary: DictionaryRepository? = null,
+    private val history: HistoryRepository? = null
 ) {
 
     private var session: LiveTranscriptionSession? = null
@@ -36,7 +39,14 @@ class DictationController(
     /** True when the engine in use puts text on screen before you stop talking. */
     val isStreaming: Boolean get() = session != null
 
-    fun begin() {
+    /**
+     * @param translating true when the orb is in translate mode.
+     *        A streaming session is deliberately NOT opened in that case: the transcribe
+     *        models return the words as spoken and cannot be asked for anything else, so
+     *        translating through them would mean a second call. Gemini can take the audio
+     *        and hand back the translation in one, which is worth losing the streaming for.
+     */
+    fun begin(translating: Boolean = false) {
         val engine = prefs.getEngine()
         startedWith = engine
         _liveText.value = ""
@@ -46,7 +56,7 @@ class DictationController(
 
         // The socket has to exist before the first buffer is read, or the opening
         // syllable is the one thing that never makes it up the wire.
-        session = if (engine.streams && apiKey.isNotBlank()) {
+        session = if (engine.streams && apiKey.isNotBlank() && !translating) {
             runCatching {
                 LiveTranscriptionSession(
                     apiKey = apiKey,
@@ -79,7 +89,14 @@ class DictationController(
      *        made at all, which is the difference between text landing immediately and
      *        text landing a second later.
      */
-    suspend fun finish(instruction: String?): Result<Pair<String, String>> {
+    /**
+     * @param translateTo a language to end up in, set when the orb is in translate mode.
+     *        On Gemini this becomes ONE call — the audio goes up with an instruction to
+     *        translate rather than transcribe. Every other provider transcribes first and
+     *        translates second, because their speech endpoints only ever return the words
+     *        that were said. That is slower, and it is the honest cost of using them.
+     */
+    suspend fun finish(instruction: String?, translateTo: String? = null): Result<Pair<String, String>> {
         val engine = startedWith
         val live = session
         session = null
@@ -97,7 +114,7 @@ class DictationController(
             if (raw.isNotEmpty()) {
                 // A Live model cannot rewrite text, and the whole point of choosing it
                 // was to avoid a second round trip. So the transcript is the answer.
-                return Result.success(raw to raw)
+                return Result.success(finished(raw, raw, translateTo))
             }
             // The socket died, the key is wrong, or there was genuinely nothing there.
             // We still hold the audio, so drop to the batch engine rather than losing a
@@ -127,30 +144,138 @@ class DictationController(
             heard.onFailure { return Result.failure(it) }
             val raw = heard.getOrNull()?.trim().orEmpty()
             if (raw.isEmpty()) return Result.failure(IllegalStateException("Nothing was said."))
-            if (instruction.isNullOrBlank() || apiKey.isBlank()) return Result.success(raw to raw)
+            if (instruction.isNullOrBlank() || apiKey.isBlank()) return Result.success(finished(raw, raw, translateTo))
             val polished = GeminiApiClient.postProcessText(
                 inputText = raw,
                 apiKey = apiKey,
                 preset = CleanupPreset.CUSTOM,
                 customPrompt = instruction
             )
-            return Result.success(raw to (polished.getOrNull()?.takeIf { it.isNotBlank() } ?: raw))
+            return Result.success(finished(raw, polished.getOrNull()?.takeIf { it.isNotBlank() } ?: raw, translateTo))
         }
 
         // ---- Gemini batch: one call does the transcript and the tone together ----
         val batchModel =
             if (engine.streams || engine.needsGroqKey) TranscriptionEngine.GEMINI_LITE.id else engine.id
 
+        // Translating on Gemini is the same request with a different instruction, so the
+        // audio is only uploaded once and no second model is involved at all.
+        val effectiveInstruction = if (!translateTo.isNullOrBlank()) {
+            translationInstruction(translateTo, languageName)
+        } else {
+            instruction
+        }
+
         return GeminiApiClient.transcribeAudio(
             audioBytes = wav,
             apiKey = apiKey,
             model = batchModel,
-            mode = if (instruction.isNullOrBlank()) TranscriptionMode.DIRECT_VERBATIM
+            mode = if (effectiveInstruction.isNullOrBlank()) TranscriptionMode.DIRECT_VERBATIM
                    else TranscriptionMode.POST_PROCESS_CLEANUP,
-            instruction = instruction,
+            instruction = effectiveInstruction,
             languageHint = languageName.takeIf { it.isNotBlank() },
             vocabulary = dictionary?.promptHint()
-        )
+        ).mapCatching { (raw, cleaned) -> finished(raw, cleaned, translateTo) }
+    }
+
+    /**
+     * Put a capital at the start of each sentence, if the setting asks for it.
+     *
+     * The switch for this has been sitting in Settings since before I touched the app,
+     * wired to precisely nothing — you could toggle it all day and no transcript ever
+     * changed. Verbatim mode is where it earns its place: a model asked for exactly what
+     * was said will happily return a lower-case opening word.
+     */
+    /**
+     * Say the name of a snippet and get the snippet.
+     *
+     * Snippets shipped with a `shortcut` field that was only ever printed on screen —
+     * you could define "/meet" and nothing on earth would ever expand it. Speaking is
+     * the natural trigger for a dictation app: say "meet", or "slash meet", or the
+     * snippet's name, and the saved text goes in instead of those words.
+     */
+    private fun expandSnippet(text: String): String? {
+        val snippets = history?.snippetsFlow?.value ?: return null
+        if (snippets.isEmpty()) return null
+        val spoken = text.trim().trimEnd('.', '!', '?', ',').lowercase()
+        if (spoken.isEmpty() || spoken.length > 40) return null
+        val match = snippets.firstOrNull { snippet ->
+            val shortcut = snippet.shortcut.trim().lowercase()
+            val bare = shortcut.removePrefix("/")
+            (shortcut.isNotEmpty() && (spoken == shortcut || spoken == bare || spoken == "slash $bare")) ||
+                snippet.title.trim().lowercase() == spoken
+        }
+        return match?.content
+    }
+
+    /**
+     * Write the dictation in another language, if one was asked for.
+     *
+     * Speak English, type Japanese. This runs on the transcript rather than the audio,
+     * so it works on every engine including the streaming ones that cannot rewrite text
+     * themselves — the translating is a separate call to whichever provider does the
+     * translating, and it only happens when a language is actually set.
+     */
+    private suspend fun translatedIfAsked(text: String): String {
+        val into = prefs.getDictationLanguage()
+        if (into.isBlank() || text.isBlank()) return text
+        return Translator.translate(text, prefs, into).getOrNull()?.takeIf { it.isNotBlank() } ?: text
+    }
+
+    /**
+     * The instruction that turns a transcription request into a translation request.
+     *
+     * Naming the spoken language when we know it matters more than it looks: told only
+     * "translate this", a model handed speech that is already partly in the target
+     * language will sometimes hand it straight back.
+     */
+    private fun translationInstruction(into: String, spoken: String): String {
+        val from = if (spoken.isBlank()) "" else "The speaker is talking in $spoken. "
+        return from + "Do not transcribe what was said. TRANSLATE it into $into and output " +
+            "only the translation — no transcript, no original, no explanation, no quotes. " +
+            "Translate faithfully, keeping the speaker's tone and meaning, and keep names, " +
+            "numbers and formatting as they are."
+    }
+
+    /**
+     * Everything a transcript goes through between the model and the text field.
+     *
+     * @param translateTo already handled upstream on Gemini, where the model did the
+     *        translating itself; here it only matters for the providers whose speech
+     *        endpoints return the words as spoken and nothing else.
+     */
+    private suspend fun finished(
+        raw: String,
+        cleaned: String,
+        translateTo: String? = null
+    ): Pair<String, String> {
+        expandSnippet(cleaned)?.let { return raw to it }
+        val translated = if (!translateTo.isNullOrBlank() && startedWith.provider != Provider.GEMINI) {
+            Translator.translate(cleaned, prefs, translateTo).getOrNull()?.takeIf { it.isNotBlank() } ?: cleaned
+        } else {
+            cleaned
+        }
+        return raw to capitalised(translatedIfAsked(translated))
+    }
+
+    private fun capitalised(text: String): String {
+        if (!prefs.isAutoCapitalizeEnabled()) return text
+        val out = StringBuilder(text)
+        var startOfSentence = true
+        for (i in out.indices) {
+            val c = out[i]
+            when {
+                startOfSentence && c.isLetter() -> {
+                    out[i] = c.uppercaseChar()
+                    startOfSentence = false
+                }
+                c in SENTENCE_END -> startOfSentence = true
+                // Whitespace and quotes after a full stop keep the flag alive; anything
+                // else means we are mid-sentence again.
+                !c.isWhitespace() && c !in CARRY_THROUGH -> startOfSentence = false
+            }
+        }
+        return out.toString()
     }
 
     /** Throw the dictation away without transcribing anything. */
@@ -159,5 +284,10 @@ class DictationController(
         session = null
         _liveText.value = ""
         recorder.cancelRecording()
+    }
+
+    private companion object {
+        val SENTENCE_END = charArrayOf('.', '!', '?', '\n')
+        val CARRY_THROUGH = charArrayOf('"', '\'', '(', '[', '“', '‘')
     }
 }

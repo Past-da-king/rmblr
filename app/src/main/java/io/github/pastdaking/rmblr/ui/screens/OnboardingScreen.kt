@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -39,7 +40,9 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,6 +78,7 @@ import io.github.pastdaking.rmblr.ui.theme.Surface
 import io.github.pastdaking.rmblr.ui.theme.TextHigh
 import io.github.pastdaking.rmblr.ui.theme.TextLow
 import io.github.pastdaking.rmblr.ui.theme.TextMid
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Whether the operator has been through onboarding. */
@@ -96,15 +100,15 @@ class OnboardingPrefs(context: Context) {
 fun OnboardingScreen(onDone: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val pager = rememberPagerState(pageCount = { 6 })
+    val pager = rememberPagerState(pageCount = { 7 })
 
     Column(modifier = Modifier.fillMaxSize().background(Ink)) {
         HorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
             when (page) {
                 0 -> Page(
-                    art = { WaveformArt() },
+                    art = { SpeakItWritesArt() },
                     title = "Speak. It writes.",
-                    body = "RMBLR turns what you say into clean, finished text, straight into whatever you were typing in. No copying, no pasting."
+                    body = "RMBLR turns what you say into clean, finished text, straight into whatever you were typing in. It can translate as it goes. No copying, no pasting."
                 )
                 1 -> Page(
                     art = { OrbArt() },
@@ -112,17 +116,22 @@ fun OnboardingScreen(onDone: () -> Unit) {
                     body = "Tap any text box in any app and the orb appears next to it. Nowhere else. It is never sitting on your home screen getting in the way."
                 )
                 2 -> Page(
-                    art = { GestureArt() },
+                    art = { GestureArt(cycling = true) },
                     title = "Tap, hold, flick",
-                    body = "Tap to dictate. Hold to choose a tone from the arc. Flick straight at one to skip the menu. Drag it anywhere and it stays put."
+                    body = "Tap to dictate. Hold to choose a tone from the arc. Flick straight at one to skip the menu. Double tap to switch it between writing and translating. Drag it anywhere and it stays put."
                 )
                 3 -> Page(
                     art = { ProfileArt() },
                     title = "It knows where you are",
                     body = "WhatsApp gets casual. Gmail gets professional. Slack gets somewhere in between. Pick the apps and the tones once, in Profiles."
                 )
-                4 -> PermissionsPage()
-                5 -> ApiKeyPage()
+                4 -> Page(
+                    art = { TranslateArt() },
+                    title = "Say it in one language, write it in another",
+                    body = "Double tap the orb and it turns into a translator. Hold it and the arc shows your languages instead of your tones — flick at one and what you say lands there. Copy something in an app and tap the orb to read it back in your language."
+                )
+                5 -> PermissionsPage()
+                6 -> ApiKeyPage()
             }
         }
 
@@ -134,7 +143,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 .padding(bottom = Space.xxl, top = Space.lg)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(Space.sm), modifier = Modifier.weight(1f)) {
-                repeat(6) { index ->
+                repeat(7) { index ->
                     Box(
                         modifier = Modifier
                             .size(width = if (index == pager.currentPage) 20.dp else 7.dp, height = 7.dp)
@@ -144,7 +153,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 }
             }
 
-            if (pager.currentPage < 5) {
+            if (pager.currentPage < 6) {
                 QuietAction("Skip", onClick = onDone)
                 Spacer(Modifier.width(Space.sm))
                 PrimaryAction("Next", onClick = {
@@ -253,8 +262,20 @@ private fun OrbArt() {
  * independently and they piled up on the right.
  */
 @Composable
-private fun GestureArt() {
-    val labels = listOf("Professional", "Clean up", "Casual", "Bullets", "Summary")
+private fun GestureArt(cycling: Boolean = false) {
+    // The arc is the same arc either way, which is the point: a double tap swaps what is
+    // on it. Showing tones only, as this page used to, taught half the gesture.
+    var translating by remember { mutableStateOf(false) }
+    if (cycling) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(2600)
+                translating = !translating
+            }
+        }
+    }
+
+    val labels = if (translating) LANGUAGES_ON_ARC else listOf("Professional", "Clean up", "Casual", "Bullets", "Summary")
     val radius = 118f
     val chipWidth = 112.dp
     val chipHeight = 32.dp
@@ -275,20 +296,33 @@ private fun GestureArt() {
                     .clip(RoundedCornerShape(16.dp))
                     .background(if (index == 2) Accent else Surface)
             ) {
-                Text(
-                    text = label,
-                    color = if (index == 2) OnAccent else TextMid,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1
-                )
+                Crossfade(targetState = label, label = "arc_chip") { shown ->
+                    Text(
+                        text = shown,
+                        color = if (index == 2) OnAccent else TextMid,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1
+                    )
+                }
             }
         }
 
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(56.dp).clip(CircleShape).background(Alert)
-        ) {
-            WaveMark(size = 26.dp, tint = OnAccent)
+        Crossfade(targetState = translating, label = "arc_centre") { translate ->
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(56.dp).clip(CircleShape).background(if (translate) Accent else Alert)
+            ) {
+                if (translate) {
+                    Icon(
+                        imageVector = Icons.Default.Translate,
+                        contentDescription = null,
+                        tint = OnAccent,
+                        modifier = Modifier.size(28.dp)
+                    )
+                } else {
+                    WaveMark(size = 26.dp, tint = OnAccent)
+                }
+            }
         }
     }
 }
@@ -301,6 +335,102 @@ private fun ProfileArt() {
         ProfileRow("Email", "Professional", Good)
         ProfileRow("Work chat", "Clean up", TextMid)
     }
+}
+
+/** The languages the arc and the first page cycle through. */
+private val LANGUAGES_ON_ARC = listOf("Espa\u00f1ol", "\u65e5\u672c\u8a9e", "Fran\u00e7ais", "isiZulu", "\u4e2d\u6587")
+
+/**
+ * Speech going in, and the writing coming out in a language that keeps changing.
+ *
+ * The first page used to promise transcription and nothing else, which made translation
+ * read as an afterthought bolted on at the end of onboarding. The same sentence rewriting
+ * itself in six languages says the whole app in one glance, before a word of body copy.
+ */
+@Composable
+private fun SpeakItWritesArt() {
+    val written = listOf(
+        "Good morning" to TextHigh,
+        "Buenos d\u00edas" to Accent,
+        "\u304a\u306f\u3088\u3046" to Accent,
+        "Bonjour" to Accent,
+        "Sawubona" to Accent,
+        "\u65e9\u4e0a\u597d" to Accent
+    )
+    var index by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1700)
+            index = (index + 1) % written.size
+        }
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        WaveformArt()
+        Spacer(Modifier.height(Space.xl))
+        Crossfade(targetState = index, label = "written") { i ->
+            val (text, tint) = written[i]
+            Text(
+                text = text,
+                color = tint,
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Surface)
+                    .padding(horizontal = Space.xl, vertical = Space.md)
+            )
+        }
+    }
+}
+
+/**
+ * The orb between two languages.
+ *
+ * Drawn rather than described because the point of translate mode is that it is the same
+ * orb doing a second job, and a picture of one orb with a language either side says that
+ * faster than a paragraph can.
+ */
+@Composable
+private fun TranslateArt() {
+    var index by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1500)
+            index = (index + 1) % LANGUAGES_ON_ARC.size
+        }
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+        LanguageChip("English", TextMid, Surface)
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(64.dp).clip(CircleShape).background(Accent)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Translate,
+                contentDescription = null,
+                tint = OnAccent,
+                modifier = Modifier.size(30.dp)
+            )
+        }
+        Crossfade(targetState = index, label = "target_language") { i ->
+            LanguageChip(LANGUAGES_ON_ARC[i], OnAccent, Accent)
+        }
+    }
+}
+
+@Composable
+private fun LanguageChip(label: String, tint: androidx.compose.ui.graphics.Color, fill: androidx.compose.ui.graphics.Color) {
+    Text(
+        text = label,
+        color = tint,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(fill)
+            .padding(horizontal = Space.lg, vertical = Space.sm)
+    )
 }
 
 @Composable
@@ -445,7 +575,7 @@ private fun ApiKeyPage() {
         Text("One key to finish", color = TextHigh, style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(Space.md))
         Text(
-            text = "RMBLR speaks to Gemini on your own API key. Nothing runs through a server of ours, so there is no account and no subscription, and your dictation is between you and Google.",
+            text = "RMBLR speaks to Gemini on your own API key. Nothing runs through a server of ours, so there is no account and no subscription, and your dictation is between you and the model. Groq, Mistral, OpenRouter and anything OpenAI-shaped work too — set those up later in Models and keys.",
             color = TextMid,
             style = MaterialTheme.typography.bodyMedium
         )

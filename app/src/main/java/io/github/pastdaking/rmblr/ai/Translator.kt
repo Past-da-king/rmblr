@@ -22,13 +22,19 @@ object Translator {
             "Keep names, numbers, code, URLs and formatting exactly as they are, and preserve " +
             "the line breaks of the original."
 
-    suspend fun translate(text: String, prefs: PreferencesManager): Result<String> {
+    /**
+     * @param into the language to end up in, or null to use the translate-into setting.
+     *        Dictation passes its own, because "write what I say in Japanese" and
+     *        "translate what I copy into English" are two different destinations that
+     *        happen to share one engine.
+     */
+    suspend fun translate(text: String, prefs: PreferencesManager, into: String? = null): Result<String> {
         val source = text.trim()
         if (source.isEmpty()) {
             return Result.failure(IllegalStateException("Nothing to translate. Copy some text first."))
         }
 
-        val target = prefs.getTranslateTarget()
+        val target = into?.takeIf { it.isNotBlank() } ?: prefs.getTranslateTarget()
         val provider = prefs.getTextProvider()
 
         if (provider == TextProvider.GEMINI) {

@@ -1,5 +1,11 @@
 package io.github.pastdaking.rmblr.ui.components
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -242,6 +248,117 @@ fun LanguageEntry(
                         )
                     }
                     if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A list you build out of chips rather than out of a paragraph.
+ *
+ * The first version of this was a multi-line text field with one item per line, which is
+ * a developer's idea of a list: to remove the third language you had to select exactly
+ * the right run of characters and the newline with it. A chip is a thing you can see the
+ * edges of, and an X on it removes exactly one.
+ */
+@Composable
+fun ChipEditor(
+    items: List<String>,
+    onItemsChange: (List<String>) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    max: Int = 5
+) {
+    var draft by remember { mutableStateOf("") }
+
+    val commit = {
+        val cleaned = draft.trim()
+        if (cleaned.isNotEmpty() && items.none { it.equals(cleaned, ignoreCase = true) }) {
+            onItemsChange((items + cleaned).take(max))
+        }
+        draft = ""
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (items.isNotEmpty()) {
+            // Two to a row rather than a horizontal scroller: a list you are editing has
+            // to show all of itself, or you delete the wrong one.
+            Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                items.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm), modifier = Modifier.fillMaxWidth()) {
+                        pair.forEach { item ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(Radius.pill))
+                                    .background(AccentWash)
+                                    .padding(start = Space.lg, end = Space.sm, top = Space.sm, bottom = Space.sm)
+                            ) {
+                                Text(
+                                    text = item,
+                                    color = Accent,
+                                    maxLines = 1,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove $item",
+                                    tint = Accent,
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .pressable(onClick = { onItemsChange(items - item) })
+                                )
+                            }
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+            Spacer(Modifier.height(Space.lg))
+        }
+
+        if (items.size < max) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(Radius.control),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { commit() }),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Accent,
+                        unfocusedBorderColor = Line,
+                        focusedTextColor = TextHigh,
+                        unfocusedTextColor = TextHigh,
+                        cursorColor = Accent,
+                        focusedContainerColor = Raised,
+                        unfocusedContainerColor = Raised
+                    ),
+                    placeholder = { Text(placeholder, color = TextLow, style = MaterialTheme.typography.bodyMedium) }
+                )
+
+                Spacer(Modifier.width(Space.sm))
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .pressable(enabled = draft.isNotBlank(), onClick = commit)
+                        .clip(RoundedCornerShape(Radius.pill))
+                        .background(if (draft.isNotBlank()) Accent else Raised)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Add",
+                        tint = if (draft.isNotBlank()) Ink else TextLow,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
         }

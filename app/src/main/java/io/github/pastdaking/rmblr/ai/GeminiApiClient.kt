@@ -91,7 +91,7 @@ object GeminiApiClient {
     ): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) {
             return@withContext Result.failure(
-                IllegalStateException("Gemini API Key is missing. Please add your API key in the iLight Settings.")
+                IllegalStateException("No Gemini key set. Add one in Settings.")
             )
         }
 
@@ -171,7 +171,7 @@ object GeminiApiClient {
                 put("systemInstruction", JSONObject().apply {
                     val sysParts = JSONArray()
                     sysParts.put(JSONObject().apply {
-                        put("text", "You are the iLight AI Keyboard voice transcriber. Output ONLY the transcript without markdown wrappers, explanations, quotes, or introductory text.")
+                        put("text", "You are a voice transcriber. Output ONLY the transcript without markdown wrappers, explanations, quotes, or introductory text.")
                     })
                     put("parts", sysParts)
                 })

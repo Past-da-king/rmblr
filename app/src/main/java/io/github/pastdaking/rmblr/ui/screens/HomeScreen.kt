@@ -13,6 +13,16 @@ import androidx.compose.foundation.horizontalScroll
 import io.github.pastdaking.rmblr.ui.components.ScreenHeader
 import io.github.pastdaking.rmblr.ui.components.PanelTone
 import androidx.compose.ui.text.style.TextAlign
+import io.github.pastdaking.rmblr.ui.components.RmblrSheet
+import io.github.pastdaking.rmblr.ui.components.LanguageEntry
+import io.github.pastdaking.rmblr.data.SUGGESTED_LANGUAGES
+import androidx.compose.material.icons.filled.Visibility
+import io.github.pastdaking.rmblr.ui.components.ValueRow
+import io.github.pastdaking.rmblr.ui.components.SheetOption
+import io.github.pastdaking.rmblr.ui.components.SheetOptions
+import io.github.pastdaking.rmblr.ui.components.ChipEditor
+import io.github.pastdaking.rmblr.ui.components.pressable
+import io.github.pastdaking.rmblr.ui.theme.OnAccent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -116,7 +126,6 @@ private fun accessibilityEnabled(context: android.content.Context): Boolean {
 fun HomeScreen(
     prefsManager: PreferencesManager,
     historyRepo: HistoryRepository,
-    onNavigateToVoiceStudio: () -> Unit,
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -125,7 +134,7 @@ fun HomeScreen(
     val clipboard = LocalClipboardManager.current
 
     val recorder = remember { AudioRecorderManager(context) }
-    val dictation = remember { DictationController(prefsManager, recorder, DictionaryRepository.getInstance(context)) }
+    val dictation = remember { DictationController(prefsManager, recorder, DictionaryRepository.getInstance(context), historyRepo) }
     val isRecording by recorder.isRecording.collectAsState()
     val amplitude by recorder.audioAmplitude.collectAsState()
     // Only ever non-empty on a streaming engine, which is the point: on Gemini Live you
@@ -137,7 +146,15 @@ fun HomeScreen(
     val orbEnabled by prefsManager.floatingEnabledFlow.collectAsState()
 
     val translateOn by prefsManager.translateEnabledFlow.collectAsState()
+    val textProvider by prefsManager.textProviderFlow.collectAsState()
+    val textKey by prefsManager.textKeyFlow.collectAsState()
+    val translationProviderLabel = textProvider.provider.label
+    val translationReady = remember(textProvider, textKey) {
+        prefsManager.getProviderKey(textProvider.provider).isNotBlank()
+    }
     val translateTarget by prefsManager.translateTargetFlow.collectAsState()
+    val dictationLanguage by prefsManager.dictationLanguageFlow.collectAsState()
+    var showWriteIn by remember { mutableStateOf(false) }
     var toTranslate by remember { mutableStateOf("") }
     var translated by remember { mutableStateOf<String?>(null) }
     var translating by remember { mutableStateOf(false) }
@@ -148,6 +165,14 @@ fun HomeScreen(
 
     // These are toggled in Android's own settings, so re-check every time we come back.
     val orbPrefs = remember { OrbPrefs(context) }
+    var arcLanguages by remember { mutableStateOf(orbPrefs.fanLanguages) }
+    var showArcLanguages by remember { mutableStateOf(false) }
+    var showShape by remember { mutableStateOf(false) }
+    var showGestures by remember { mutableStateOf(false) }
+    var showMode by remember { mutableStateOf(false) }
+    var showStyle by remember { mutableStateOf(false) }
+    var showPasteTranslate by remember { mutableStateOf(false) }
+    var alwaysOn by remember { mutableStateOf(orbPrefs.alwaysVisible) }
     var orbSize by remember { mutableIntStateOf(orbPrefs.sizeDp) }
     var onLeft by remember { mutableStateOf(orbPrefs.onLeftEdge) }
     var bias by remember { mutableFloatStateOf(orbPrefs.verticalBias) }
@@ -273,7 +298,9 @@ fun HomeScreen(
 
             SettingRow(
                 label = "Orb",
-                supporting = if (ready) "Shows only while a text field has the cursor" else "Finish the two steps above first",
+                supporting = if (ready) {
+                    if (alwaysOn) "Always on screen" else "Shows only while a text field has the cursor"
+                } else "Finish the two steps above first",
                 icon = Icons.Default.Layers,
                 trailing = {
                     Switch(
@@ -292,86 +319,74 @@ fun HomeScreen(
                                 context.stopService(intent)
                             }
                         },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Ink,
-                            checkedTrackColor = Accent,
-                            checkedBorderColor = Accent,
-                            uncheckedThumbColor = TextLow,
-                            uncheckedTrackColor = Raised,
-                            uncheckedBorderColor = Line
-                        ),
+                        colors = homeSwitchColours(),
                         modifier = Modifier.testTag("switch_orb")
                     )
                 }
             )
+
+            Hairline(Modifier.padding(vertical = Space.md))
+
+            SettingRow(
+                label = "Keep it on screen",
+                supporting = "Even when nothing has the cursor",
+                icon = Icons.Default.Visibility,
+                trailing = {
+                    Switch(
+                        checked = alwaysOn,
+                        onCheckedChange = { orbPrefs.alwaysVisible = it; alwaysOn = it },
+                        colors = homeSwitchColours()
+                    )
+                }
+            )
+
+            Hairline(Modifier.padding(vertical = Space.md))
+
+            // Translating is a headline feature, not a footnote — it belongs with the
+            // switches that decide what the app does, not three screens further down.
+            SettingRow(
+                label = "Translate what you copy",
+                supporting = if (translateOn) {
+                    if (translationReady) "Copy anything and the orb offers to translate it"
+                    else "Needs a key for $translationProviderLabel"
+                } else "Copy anything and the orb offers to translate it",
+                icon = Icons.Default.Translate,
+                trailing = {
+                    Switch(
+                        checked = translateOn,
+                        onCheckedChange = { prefsManager.setTranslateEnabled(it) },
+                        colors = homeSwitchColours()
+                    )
+                }
+            )
+
+            // Turning it on is the moment to say what it still needs, rather than
+            // letting it fail silently the first time it is used.
+            if (translateOn && !translationReady) {
+                Spacer(Modifier.height(Space.md))
+                Text(
+                    text = "$translationProviderLabel has no key yet, so translating will fail. " +
+                        "Add one under Settings → Models & keys → Translation.",
+                    color = Alert,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(Space.md))
+                QuietAction(text = "Open Models & keys", onClick = onNavigateToSettings)
+            }
         }
 
         Spacer(Modifier.height(Space.xxl))
 
         SectionLabel("Shape and place it")
 
-        Panel {
-            // Show the thing being sized, at the size being chosen. Reading "52" tells
-            // you nothing about whether it is the right size for your thumb.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth().height(88.dp)
-            ) {
-                Orb(phase = OrbPhase.IDLE, amplitude = 0f, size = orbSize.dp)
-            }
-
-            Spacer(Modifier.height(Space.sm))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Size", color = TextMid, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
-                Slider(
-                    value = orbSize.toFloat(),
-                    onValueChange = {
-                        orbSize = it.toInt()
-                        orbPrefs.sizeDp = orbSize
-                    },
-                    valueRange = 40f..80f,
-                    steps = 7,
-                    colors = sliderColours(),
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(Modifier.width(Space.md))
-                Text("$orbSize", color = TextHigh, style = MaterialTheme.typography.labelLarge)
-            }
-
-            Spacer(Modifier.height(Space.md))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Height", color = TextMid, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
-                Slider(
-                    value = bias,
-                    onValueChange = {
-                        bias = it
-                        orbPrefs.verticalBias = it
-                    },
-                    valueRange = 0.05f..0.9f,
-                    colors = sliderColours(),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Spacer(Modifier.height(Space.md))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Side", color = TextMid, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
-                SideChoice("Left", onLeft) { onLeft = true; orbPrefs.onLeftEdge = true }
-                Spacer(Modifier.width(Space.sm))
-                SideChoice("Right", !onLeft) { onLeft = false; orbPrefs.onLeftEdge = false }
-            }
-
-            Spacer(Modifier.height(Space.lg))
-            Text(
-                text = "Dragging the orb itself does the same thing, and it remembers.",
-                color = TextLow,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
+        // The one thing worth hiding behind a sheet: sizing is a thing you do once,
+        // with three fiddly controls, and it does not deserve permanent screen space.
+        ValueRow(
+            label = "Size and place",
+            value = "$orbSize dp",
+            supporting = if (onLeft) "Left edge" else "Right edge",
+            onClick = { showShape = true }
+        )
 
         Spacer(Modifier.height(Space.xxl))
 
@@ -380,129 +395,47 @@ fun HomeScreen(
         Panel {
             Gesture("Tap", "Dictate with your default action.")
             Spacer(Modifier.height(Space.md))
-            Gesture("Hold", "Pick one of your four actions, then speak.")
+            Gesture("Double tap", "Switch between dictating and translating.")
             Spacer(Modifier.height(Space.md))
-            Gesture("Flick", "Fire that direction's action straight away.")
+            Gesture("Hold", "Pick an action — or a language, when translating.")
+            Spacer(Modifier.height(Space.md))
+            Gesture("Flick", "Fire that direction straight away.")
             Spacer(Modifier.height(Space.md))
             Gesture("Drag", "Park it wherever you like. It stays there.")
-            Spacer(Modifier.height(Space.lg))
-            QuietAction(
-                text = "Change the four actions",
-                onClick = onNavigateToVoiceStudio,
-                icon = Icons.Default.Tune
-            )
         }
 
         Spacer(Modifier.height(Space.xxl))
 
-        // Translation sits here rather than in Settings because it is a thing the orb
-        // DOES, like dictating — not a preference. Which model performs it, and into
-        // what language, is configuration and stays in Settings.
-        SectionLabel("Translate what you copy")
+        SectionLabel("Speak in another language")
 
         Panel {
-            SettingRow(
-                label = "Turn it on",
-                icon = Icons.Default.Translate,
-                trailing = {
-                    Switch(
-                        checked = translateOn,
-                        onCheckedChange = { prefsManager.setTranslateEnabled(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Ink,
-                            checkedTrackColor = Accent,
-                            checkedBorderColor = Accent,
-                            uncheckedThumbColor = TextLow,
-                            uncheckedTrackColor = Raised,
-                            uncheckedBorderColor = Line
-                        )
-                    )
-                }
-            )
-
-            Spacer(Modifier.height(Space.md))
             Text(
-                text = "Copy any text and the orb appears with a translate mark. Tap it and the " +
-                    "translation comes back in a bubble. The clipboard is read at the moment you " +
-                    "tap and at no other time.",
+                text = "Double tap the orb to switch it to translating. Hold it and the arc " +
+                    "offers these languages instead of your tones — flick towards one and " +
+                    "whatever you say comes out in it.",
                 color = TextMid,
                 style = MaterialTheme.typography.bodySmall
             )
 
             Spacer(Modifier.height(Space.lg))
-            Hairline()
-            Spacer(Modifier.height(Space.lg))
 
-            Text(
-                text = "Or paste something here, into $translateTarget",
-                color = TextLow,
-                style = MaterialTheme.typography.labelSmall
-            )
-            Spacer(Modifier.height(Space.sm))
-
-            OutlinedTextField(
-                value = toTranslate,
-                onValueChange = { toTranslate = it },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(Radius.control),
-                textStyle = MaterialTheme.typography.bodyMedium,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Accent,
-                    unfocusedBorderColor = Line,
-                    focusedTextColor = TextHigh,
-                    unfocusedTextColor = TextHigh,
-                    cursorColor = Accent,
-                    focusedContainerColor = Raised,
-                    unfocusedContainerColor = Raised
-                ),
-                placeholder = {
-                    Text("Paste text to translate", color = TextLow, style = MaterialTheme.typography.bodyMedium)
-                }
-            )
-
-            Spacer(Modifier.height(Space.md))
-            PrimaryAction(
-                text = if (translating) "Translating" else "Translate",
-                enabled = toTranslate.isNotBlank() && !translating,
-                onClick = {
-                    translating = true
-                    translated = null
-                    scope.launch {
-                        val result = withContext(Dispatchers.IO) {
-                            Translator.translate(toTranslate, prefsManager)
-                        }
-                        translating = false
-                        translated = result.getOrElse { it.message ?: "Could not translate that." }
-                    }
-                }
-            )
-
-            translated?.let { out ->
-                Spacer(Modifier.height(Space.lg))
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                    Text(
-                        text = out,
-                        color = TextHigh,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(Space.md))
-                    IconButton(
-                        onClick = { clipboard.setText(AnnotatedString(out)) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = TextMid, modifier = Modifier.size(18.dp))
-                    }
-                }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = arcLanguages.joinToString(" · ").ifBlank { "None set" },
+                    color = TextHigh,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                QuietAction(text = "Change", onClick = { showArcLanguages = true })
             }
         }
 
         Spacer(Modifier.height(Space.xxl))
 
-        // Mode and Style used to live on a Voice Studio page that nothing in the app
-        // navigated to — the button that claimed to open it went to Profiles instead, so
-        // these two controls existed and were unreachable. They belong with the rest of
-        // the orb's behaviour.
         SectionLabel("How it writes")
 
         Panel {
@@ -554,15 +487,30 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
-        }
 
+            Spacer(Modifier.height(Space.lg))
+            Hairline()
+            Spacer(Modifier.height(Space.lg))
+
+            Text("Write it in", color = TextLow, style = MaterialTheme.typography.labelSmall)
+            Spacer(Modifier.height(Space.sm))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = dictationLanguage.ifBlank { "Whatever I said" },
+                    color = TextHigh,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                QuietAction(text = "Change", onClick = { showWriteIn = true })
+            }
+        }
 
         Spacer(Modifier.height(Space.xxl))
 
-        // Testing goes last, and small. It sat at the top as a large card for one
-        // release and was wrong twice over: it is the least important thing on a setup
-        // screen, and you cannot sensibly try the app before you have finished telling
-        // it what to do.
         SectionLabel("Try it")
 
         Panel {
@@ -606,9 +554,171 @@ fun HomeScreen(
                     }
                 }
             }
+
+            Spacer(Modifier.height(Space.lg))
+            Hairline()
+            Spacer(Modifier.height(Space.lg))
+
+            // Testing the translator belongs next to testing the microphone, not in a
+            // section of its own halfway up the page. Both answer the same question.
+            Text(
+                text = "Or paste something, into $translateTarget",
+                color = TextLow,
+                style = MaterialTheme.typography.labelSmall
+            )
+            Spacer(Modifier.height(Space.sm))
+
+            OutlinedTextField(
+                value = toTranslate,
+                onValueChange = { toTranslate = it },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(Radius.control),
+                textStyle = MaterialTheme.typography.bodyMedium,
+                colors = homeFieldColours(),
+                placeholder = {
+                    Text("Paste text to translate", color = TextLow, style = MaterialTheme.typography.bodyMedium)
+                }
+            )
+
+            Spacer(Modifier.height(Space.md))
+            PrimaryAction(
+                text = if (translating) "Translating" else "Translate",
+                enabled = toTranslate.isNotBlank() && !translating,
+                onClick = {
+                    translating = true
+                    translated = null
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            Translator.translate(toTranslate, prefsManager)
+                        }
+                        translating = false
+                        translated = result.getOrElse { it.message ?: "Could not translate that." }
+                    }
+                }
+            )
+
+            translated?.let { out ->
+                Spacer(Modifier.height(Space.lg))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    Text(
+                        text = out,
+                        color = TextHigh,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(Space.md))
+                    IconButton(
+                        onClick = { clipboard.setText(AnnotatedString(out)) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = TextMid, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+        }
+    }
+
+    if (showShape) {
+        RmblrSheet("Size and place", { showShape = false }) {
+            // Show the thing being sized, at the size being chosen. Reading "52" tells
+            // you nothing about whether it is the right size for your thumb.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth().height(88.dp)
+            ) {
+                Orb(phase = OrbPhase.IDLE, amplitude = 0f, size = orbSize.dp)
+            }
+
+            Spacer(Modifier.height(Space.sm))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Size", color = TextMid, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
+                Slider(
+                    value = orbSize.toFloat(),
+                    onValueChange = { orbSize = it.toInt(); orbPrefs.sizeDp = orbSize },
+                    valueRange = 40f..80f,
+                    steps = 7,
+                    colors = sliderColours(),
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(Space.md))
+                Text("$orbSize", color = TextHigh, style = MaterialTheme.typography.labelLarge)
+            }
+
+            Spacer(Modifier.height(Space.md))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Height", color = TextMid, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
+                Slider(
+                    value = bias,
+                    onValueChange = { bias = it; orbPrefs.verticalBias = it },
+                    valueRange = 0.05f..0.9f,
+                    colors = sliderColours(),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(Modifier.height(Space.md))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Side", color = TextMid, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
+                SideChoice("Left", onLeft) { onLeft = true; orbPrefs.onLeftEdge = true }
+                Spacer(Modifier.width(Space.sm))
+                SideChoice("Right", !onLeft) { onLeft = false; orbPrefs.onLeftEdge = false }
+            }
+
+            Spacer(Modifier.height(Space.lg))
+            Text(
+                text = "Dragging the orb itself does the same thing, and it remembers.",
+                color = TextLow,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+
+    if (showWriteIn) {
+        RmblrSheet("Write it in", { showWriteIn = false }) {
+            LanguageEntry(
+                value = dictationLanguage,
+                onValueChange = { prefsManager.setDictationLanguage(it) },
+                suggestions = SUGGESTED_LANGUAGES,
+                placeholder = "Leave blank to write what I said"
+            )
+            Spacer(Modifier.height(Space.lg))
+            Text(
+                text = "Speak in one language and have it typed in another. Leave it blank and " +
+                    "nothing changes — your words go in exactly as spoken.",
+                color = TextMid,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+
+    if (showArcLanguages) {
+        RmblrSheet("Languages on the arc", { showArcLanguages = false }) {
+            Text(
+                text = "Up to five, in the order they sit on the arc. Double tap the orb to " +
+                    "switch it to translating, then hold to pick one.",
+                color = TextMid,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(Modifier.height(Space.lg))
+            ChipEditor(
+                items = arcLanguages,
+                onItemsChange = { orbPrefs.fanLanguages = it; arcLanguages = orbPrefs.fanLanguages },
+                placeholder = "Add a language"
+            )
         }
     }
 }
+
+@Composable
+private fun sliderColours() = SliderDefaults.colors(
+    thumbColor = Accent,
+    activeTrackColor = Accent,
+    inactiveTrackColor = Raised
+)
 
 @Composable
 private fun Gesture(gesture: String, meaning: String) {
@@ -617,7 +727,7 @@ private fun Gesture(gesture: String, meaning: String) {
             text = gesture,
             color = Accent,
             style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.width(56.dp)
+            modifier = Modifier.width(84.dp)
         )
         Text(text = meaning, color = TextMid, style = MaterialTheme.typography.bodySmall)
     }
@@ -628,22 +738,36 @@ private fun SideChoice(label: String, active: Boolean, onClick: () -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (active) AccentWash else Raised)
-            .clickable { onClick() }
+            .pressable(onClick = onClick)
+            .clip(RoundedCornerShape(Radius.pill))
+            .background(if (active) Accent else Raised)
             .padding(horizontal = Space.lg, vertical = Space.sm)
     ) {
         Text(
             text = label,
-            color = if (active) Accent else TextMid,
+            color = if (active) OnAccent else TextMid,
             style = MaterialTheme.typography.labelLarge
         )
     }
 }
 
 @Composable
-private fun sliderColours() = SliderDefaults.colors(
-    thumbColor = Accent,
-    activeTrackColor = Accent,
-    inactiveTrackColor = Raised
+private fun homeSwitchColours() = SwitchDefaults.colors(
+    checkedThumbColor = Ink,
+    checkedTrackColor = Accent,
+    checkedBorderColor = Accent,
+    uncheckedThumbColor = TextLow,
+    uncheckedTrackColor = Raised,
+    uncheckedBorderColor = Line
+)
+
+@Composable
+private fun homeFieldColours() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = Accent,
+    unfocusedBorderColor = Line,
+    focusedTextColor = TextHigh,
+    unfocusedTextColor = TextHigh,
+    cursorColor = Accent,
+    focusedContainerColor = Raised,
+    unfocusedContainerColor = Raised
 )

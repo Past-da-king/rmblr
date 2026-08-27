@@ -143,6 +143,19 @@ fun SettingsScreen(
                 SettingsGroup.values().forEach { entry ->
                     GroupRow(entry) { openGroup = entry }
                 }
+
+                // The walkthrough was a one-shot: seen once, gone forever, and there was no
+                // way back to it when it gained a page. recreate() is enough because the
+                // seen-it flag is only read when setContent runs.
+                val context = LocalContext.current
+                ValueRow(
+                    label = "Walkthrough",
+                    value = "Show it again",
+                    onClick = {
+                        OnboardingPrefs(context).done = false
+                        (context as? android.app.Activity)?.recreate()
+                    }
+                )
             }
         } else {
             Row(

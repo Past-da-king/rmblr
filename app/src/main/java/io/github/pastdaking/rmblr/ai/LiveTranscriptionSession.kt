@@ -83,6 +83,8 @@ class LiveTranscriptionSession(
     @Volatile private var turnDone = false
     @Volatile private var lastDeltaAt = 0L
     @Volatile private var endedAt = 0L
+    /** Has anything at all come back since the microphone was released? */
+    @Volatile private var deltaAfterEnd = false
     @Volatile private var failure: Throwable? = null
 
     private val socket: WebSocket
@@ -140,6 +142,7 @@ class LiveTranscriptionSession(
                             transcript.append(delta)
                         }
                         lastDeltaAt = System.currentTimeMillis()
+                        if (ended) deltaAfterEnd = true
                         _text.value = synchronized(transcript) { transcript.toString() }
                     }
                 }
@@ -216,12 +219,16 @@ class LiveTranscriptionSession(
                 val quietFor = System.currentTimeMillis() - maxOf(lastDeltaAt, endedAt)
                 val waited = System.currentTimeMillis() - startedWaiting
 
-                // Even a completion that arrives after the mic is released gets a
-                // moment's grace, because the transcript for the last utterance and the
-                // flag that closes it can land in either order.
-                val done = (turnDone && quietFor > SETTLE_GRACE_MS) ||
-                    (heard.isNotEmpty() && lastDeltaAt > 0L && quietFor > QUIET_MS) ||
-                    waited > MAX_WAIT_MS
+                // A completion flag alone is NOT allowed to end this, even after the
+                // release. Speak, pause, speak again, let go: the flag closing the FIRST
+                // utterance can still be in flight when you release, and honouring it
+                // settles before the last thing you said has arrived. That is the clipped
+                // tail, and it is the third distinct route to it. So a flag only counts
+                // once something has actually come back since the mic was released;
+                // otherwise we simply wait for the transcript to fall quiet.
+                val done = waited > MAX_WAIT_MS ||
+                    (deltaAfterEnd && turnDone && quietFor > SETTLE_GRACE_MS) ||
+                    (heard.isNotEmpty() && lastDeltaAt > 0L && quietFor > QUIET_MS)
 
                 if (done) {
                     settle(
@@ -321,7 +328,7 @@ class LiveTranscriptionSession(
          * we call it finished. Long enough that a pause between the last two words does
          * not truncate anything, short enough to be invisible.
          */
-        private const val QUIET_MS = 600L
+        private const val QUIET_MS = 900L
 
         /**
          * How long to keep listening after the server says it has finished.
@@ -336,7 +343,7 @@ class LiveTranscriptionSession(
         private val SENTENCE_ENDINGS = charArrayOf('.', '!', '?', ',', ':', ';')
 
         /** Ceiling on the tail wait only — not on the recording, which has no limit. */
-        private const val MAX_WAIT_MS = 8_000L
+        private const val MAX_WAIT_MS = 12_000L
 
         private const val POLL_MS = 60L
 

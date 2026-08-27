@@ -114,7 +114,10 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     private var menuOpen by mutableStateOf(false)
     private var highlighted by mutableStateOf(-1)
     private var orbOffset by mutableStateOf(IntOffset(0, 0))
-    private var fanItems by mutableStateOf<List<Tone>>(emptyList())
+    private var fanItems by mutableStateOf<List<String>>(emptyList())
+    /** What each arc chip does, parallel to [fanItems]. */
+    private var fanTones = emptyList<Tone>()
+    private var fanLanguages = emptyList<String>()
     private var fanOpensRight by mutableStateOf(false)
     private var dragging = false
     private var downRawX = 0f
@@ -124,6 +127,8 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     private var startY = 0
     private var longPress: Runnable? = null
     private var activeTone: Tone? = null
+    private var activeTranslateTo: String? = null
+    private var recordingStartedAt = 0L
 
     // Translation. The orb wears a globe when there is no text field to dictate into but
     // translating whatever is on the clipboard is still useful.
@@ -157,6 +162,17 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     companion object {
         private const val TAG = "RmblrOrb"
 
+        /**
+         * How quickly the second tap has to land to count as a double tap.
+         *
+         * A single tap starts recording immediately — that responsiveness is the whole
+         * feel of the orb and is not worth delaying to wait and see whether a second tap
+         * is coming. So the second tap instead CANCELS the recording the first one
+         * started, and switches mode. Nothing is lost: you cannot say anything
+         * meaningful in a third of a second.
+         */
+        private const val DOUBLE_TAP_MS = 320L
+
         /** How long after a copy the orb stays offered before it gets out of the way. */
         private const val ARM_WINDOW_MS = 60_000L
 
@@ -181,12 +197,14 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
         tones = ToneStore(this)
         history = HistoryRepository.getInstance(this)
         recorder = AudioRecorderManager(this)
-        dictation = DictationController(prefs, recorder, DictionaryRepository.getInstance(this))
+        dictation = DictationController(prefs, recorder, DictionaryRepository.getInstance(this), history)
         vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
 
         clipboard = (getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)?.also {
             runCatching { it.addPrimaryClipChangedListener(clipListener) }
         }
+
+        OrbState.setMode(orbPrefs.mode)
 
         startForegroundNotification()
         addOverlay()
@@ -264,7 +282,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                 // and leaves a minute later, is a feature.
                 val justCopied = prefs.isTranslateEnabled() && OrbState.copiedRecently(ARM_WINDOW_MS)
 
-                val show = (OrbState.shouldBeVisible() || justCopied) &&
+                val show = (OrbState.shouldBeVisible() || justCopied || orbPrefs.alwaysVisible) &&
                     prefs.isFloatingAssistantEnabled()
 
                 translateMode = justCopied &&
@@ -347,25 +365,57 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
 
                 if (menuOpen) {
                     val chosen = highlighted
-                    val chosenPreset = fanItems.getOrNull(chosen)
                     closeMenu()
-                    if (chosenPreset != null) beginDictation(chosenPreset)
+                    if (chosen >= 0) {
+                        if (OrbState.mode.value == OrbMode.TRANSLATE) {
+                            fanLanguages.getOrNull(chosen)?.let { beginTranslation(it) }
+                        } else {
+                            fanTones.getOrNull(chosen)?.let { beginDictation(it) }
+                        }
+                    }
                 } else if (dragging) {
                     if (elapsed < 300 && travel > dp(90)) {
                         // A flick, not a move: put the orb back and run that direction.
                         orbX = startX
                         orbY = startY
                         applyOrbPosition()
-                        beginDictation(tones.byId(directionSlot(directionOf(dx, dy))))
+                        if (OrbState.mode.value == OrbMode.TRANSLATE) {
+                            val slot = when (directionOf(dx, dy)) {
+                                OrbDirection.UP -> 0
+                                OrbDirection.LEFT -> 1
+                                OrbDirection.RIGHT -> 3
+                                OrbDirection.DOWN -> 4
+                            }
+                            val langs = orbPrefs.fanLanguages
+                            beginTranslation(langs.getOrNull(slot) ?: langs.firstOrNull().orEmpty())
+                        } else {
+                            beginDictation(tones.byId(directionSlot(directionOf(dx, dy))))
+                        }
                     } else {
                         snapToEdge()
                     }
                 } else {
-                    haptic(12)
+                    val recording = OrbState.phase.value == OrbPhase.RECORDING
+                    val quickSecondTap = recording &&
+                        System.currentTimeMillis() - recordingStartedAt < DOUBLE_TAP_MS
+
                     when {
-                        OrbState.phase.value == OrbPhase.RECORDING -> finishDictation()
-                        translateMode -> translateClipboard()
-                        else -> beginDictation(tones.byId(activeProfile().tap))
+                        // Double tap: throw away the recording the first tap started and
+                        // swap between dictating and translating.
+                        quickSecondTap -> {
+                            dictation.cancel()
+                            val next = OrbState.toggleMode()
+                            orbPrefs.mode = next
+                            OrbState.setPhase(OrbPhase.IDLE)
+                            haptic(28)
+                        }
+                        recording -> { haptic(12); finishDictation() }
+                        translateMode -> { haptic(12); translateClipboard() }
+                        OrbState.mode.value == OrbMode.TRANSLATE -> {
+                            haptic(12)
+                            beginTranslation(orbPrefs.fanLanguages.firstOrNull().orEmpty())
+                        }
+                        else -> { haptic(12); beginDictation(tones.byId(activeProfile().tap)) }
                     }
                 }
                 dragging = false
@@ -422,11 +472,19 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
 
         // Exactly what this profile is for, nothing else. Seven chips on an arc was
         // clutter, and every extra one shrinks the angle you have to aim at.
-        val profile = activeProfile()
-        fanItems = listOf(profile.up, profile.left, profile.tap, profile.right, profile.down)
-            .distinct()
-            .take(5)
-            .map { tones.byId(it) }
+        if (OrbState.mode.value == OrbMode.TRANSLATE) {
+            fanLanguages = orbPrefs.fanLanguages
+            fanTones = emptyList()
+            fanItems = fanLanguages
+        } else {
+            val profile = activeProfile()
+            fanTones = listOf(profile.up, profile.left, profile.tap, profile.right, profile.down)
+                .distinct()
+                .take(5)
+                .map { tones.byId(it) }
+            fanLanguages = emptyList()
+            fanItems = fanTones.map { it.name }
+        }
 
         menuOpen = true
         expandWindow()
@@ -505,11 +563,12 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                     )
                 }
             } else {
+                val mode by OrbState.mode.collectAsState()
                 Orb(
                     phase = phase,
                     amplitude = amplitude,
                     size = orbSize,
-                    translate = translateMode
+                    translate = translateMode || mode == OrbMode.TRANSLATE
                 )
             }
         }
@@ -595,10 +654,27 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
 
     // ---------------------------------------------------------------- dictation
 
+    /** Record, then hand back what was said in [language] rather than as it was said. */
+    private fun beginTranslation(language: String) {
+        if (language.isBlank()) {
+            OrbState.setPhase(OrbPhase.FAILED, "No languages set for the arc yet.")
+            handler.postDelayed({ OrbState.setPhase(OrbPhase.IDLE) }, 1600)
+            return
+        }
+        activeTone = null
+        activeTranslateTo = language
+        recordingStartedAt = System.currentTimeMillis()
+        OrbState.setPhase(OrbPhase.RECORDING)
+        haptic(20)
+        dictation.begin(translating = true)
+    }
+
     private fun beginDictation(tone: Tone?) {
         // A tone the current engine cannot honour is dropped here rather than silently
         // ignored later, so what happens matches what Settings said would happen.
         activeTone = tone?.takeIf { prefs.getEngine().supportsTone }
+        activeTranslateTo = null
+        recordingStartedAt = System.currentTimeMillis()
         OrbState.setPhase(OrbPhase.RECORDING)
         haptic(20)
         dictation.begin()
@@ -613,7 +689,9 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
             // A plain tap asks for no tone, which means no rewriting call at all: the
             // words go straight into the field instead of taking a detour through a
             // second model first.
-            val result = withContext(Dispatchers.IO) { dictation.finish(tone?.prompt) }
+            val result = withContext(Dispatchers.IO) {
+                dictation.finish(tone?.prompt, activeTranslateTo)
+            }
 
             result.onSuccess { (raw, cleaned) ->
                 // Said nothing: do nothing. No paste, no error, no history entry.
@@ -632,7 +710,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                 val written = FieldWatcherService.instance?.insertAtCursor(cleaned) == true
                 OrbState.setPhase(
                     if (written) OrbPhase.DONE else OrbPhase.FAILED,
-                    if (written) null else "Copied. Turn on iLight in Accessibility to paste for you."
+                    if (written) null else "Copied. Turn on RMBLR in Accessibility to paste for you."
                 )
                 haptic(if (written) 24 else 40)
             }.onFailure { err ->

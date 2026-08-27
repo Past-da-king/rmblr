@@ -3,6 +3,9 @@ package io.github.pastdaking.rmblr
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
+import io.github.pastdaking.rmblr.orb.OrbOverlayService
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -86,6 +89,33 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var prefsManager: PreferencesManager
     private lateinit var historyRepo: HistoryRepository
+
+    /**
+     * Start the orb again if the switch says it should be running.
+     *
+     * The switch stores a preference and starts the service in the same breath, which
+     * looks correct until the process dies — a reinstall, a reboot, Android reclaiming
+     * memory. The preference survives, the service does not, so the switch sat there
+     * reading ON while nothing was listening, and the only way back was to toggle it off
+     * and on again. Reconciling the two every time the app is opened costs nothing:
+     * starting a foreground service that is already running is a no-op.
+     */
+    private fun syncOrbService() {
+        if (!prefsManager.isFloatingAssistantEnabled()) return
+        val canOverlay = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+            Settings.canDrawOverlays(this)
+        if (!canOverlay) return
+        val intent = Intent(this, OrbOverlayService::class.java)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+            else startService(intent)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        syncOrbService()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -178,7 +208,6 @@ class MainActivity : ComponentActivity() {
                                 0 -> HomeScreen(
                                     prefsManager = prefsManager,
                                     historyRepo = historyRepo,
-                                    onNavigateToVoiceStudio = { selectedTabIndex = 1 },
                                     onNavigateToSettings = { selectedTabIndex = 3 }
                                 )
                                 1 -> ProfilesScreen()

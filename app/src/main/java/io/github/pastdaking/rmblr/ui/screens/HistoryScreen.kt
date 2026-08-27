@@ -10,6 +10,18 @@ import io.github.pastdaking.rmblr.ui.components.pressable
 import io.github.pastdaking.rmblr.ui.theme.OnAccent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.os.ConfigurationCompat
+import androidx.compose.material.icons.filled.Autorenew
+import androidx.compose.runtime.rememberCoroutineScope
+import io.github.pastdaking.rmblr.ai.GeminiApiClient
+import io.github.pastdaking.rmblr.data.CleanupPreset
+import io.github.pastdaking.rmblr.data.PreferencesManager
+import io.github.pastdaking.rmblr.orb.FieldWatcherService
+import io.github.pastdaking.rmblr.orb.Tone
+import io.github.pastdaking.rmblr.orb.ToneStore
+import io.github.pastdaking.rmblr.ui.components.RmblrSheet
+import io.github.pastdaking.rmblr.ui.components.SheetOption
+import io.github.pastdaking.rmblr.ui.components.SheetOptions
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -90,6 +102,23 @@ fun HistoryScreen(
     val suggestions = remember(historyItems, words) {
         DictionaryRepository.suggestionsFrom(historyItems, words)
     }
+    var query by remember { mutableStateOf("") }
+    var redoing by remember { mutableStateOf<DictationHistoryItem?>(null) }
+    var redoBusy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val prefsManager = remember { PreferencesManager.getInstance(context) }
+    val tones = remember { ToneStore(context) }
+
+    // Matched against BOTH the raw and the tidied text: you remember what you said far
+    // more often than you remember what came back.
+    val shownHistory = remember(historyItems, query) {
+        val q = query.trim()
+        if (q.isEmpty()) historyItems
+        else historyItems.filter {
+            it.rawText.contains(q, ignoreCase = true) || it.cleanedText.contains(q, ignoreCase = true)
+        }
+    }
+
     var newWord by remember { mutableStateOf("") }
     var newSpelling by remember { mutableStateOf("") }
 
@@ -126,6 +155,43 @@ fun HistoryScreen(
             }
         }
 
+        redoing?.let { item ->
+            RedoSheet(
+                item = item,
+                tones = tones.load(),
+                busy = redoBusy,
+                onDismiss = { if (!redoBusy) redoing = null },
+                onPick = { tone ->
+                    redoBusy = true
+                    scope.launch {
+                        // Rewrites what was SAID, not what came back — running a tone
+                        // over an already-toned result compounds the rewriting.
+                        val result = GeminiApiClient.postProcessText(
+                            inputText = item.rawText.ifBlank { item.cleanedText },
+                            apiKey = prefsManager.getEffectiveApiKey(),
+                            preset = CleanupPreset.CUSTOM,
+                            customPrompt = tone.prompt
+                        )
+                        redoBusy = false
+                        result.onSuccess { text ->
+                            if (text.isNotBlank()) {
+                                historyRepo.addHistoryItem(
+                                    DictationHistoryItem(
+                                        rawText = item.rawText,
+                                        cleanedText = text,
+                                        mode = TranscriptionMode.POST_PROCESS_CLEANUP,
+                                        preset = CleanupPreset.CUSTOM
+                                    )
+                                )
+                                clipboardManager.setText(AnnotatedString(text))
+                            }
+                        }
+                        redoing = null
+                    }
+                }
+            )
+        }
+
         Spacer(Modifier.height(Space.lg))
 
         Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
@@ -137,10 +203,17 @@ fun HistoryScreen(
         Spacer(Modifier.height(Space.lg))
 
         if (selectedTab == 0) {
-            if (historyItems.isEmpty()) {
+            if (historyItems.isNotEmpty()) {
+                SnippetField(query, { query = it }, "Search what you have said")
+                Spacer(Modifier.height(Space.lg))
+            }
+
+            if (shownHistory.isEmpty()) {
                 EmptyState(
-                    headline = "Nothing dictated yet",
-                    body = "Tap a text box in any app, tap the orb, and say something. It lands here."
+                    headline = if (query.isBlank()) "Nothing dictated yet" else "Nothing matches that",
+                    body = if (query.isBlank())
+                        "Tap a text box in any app, tap the orb, and say something. It lands here."
+                    else "Try a word you know you actually said."
                 )
             } else {
                 LazyColumn(
@@ -148,11 +221,12 @@ fun HistoryScreen(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = Space.navClear),
                     modifier = Modifier.weight(1f)
                 ) {
-                    items(historyItems, key = { it.id }) { item ->
+                    items(shownHistory, key = { it.id }) { item ->
                         HistoryCard(
                             item = item,
                             onCopy = { text -> clipboardManager.setText(AnnotatedString(text)) },
-                            onDelete = { historyRepo.deleteHistoryItem(item.id) }
+                            onDelete = { historyRepo.deleteHistoryItem(item.id) },
+                            onRedo = { redoing = item }
                         )
                     }
                 }
@@ -254,7 +328,17 @@ fun HistoryScreen(
                                         Spacer(Modifier.width(Space.sm))
                                     }
                                     IconButton(
-                                        onClick = { clipboardManager.setText(AnnotatedString(snippet.content)) },
+                                        onClick = {
+                                            // Straight into whatever has the cursor, if
+                                            // the accessibility service is on. Copying
+                                            // was all it ever did, which made snippets a
+                                            // thing you had to go and fetch.
+                                            val typed = FieldWatcherService.instance
+                                                ?.insertAtCursor(snippet.content) == true
+                                            if (!typed) {
+                                                clipboardManager.setText(AnnotatedString(snippet.content))
+                                            }
+                                        },
                                         modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = TextMid, modifier = Modifier.size(16.dp))
@@ -276,6 +360,40 @@ fun HistoryScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/** Re-run something already said through a different tone. */
+@Composable
+private fun RedoSheet(
+    item: DictationHistoryItem,
+    tones: List<Tone>,
+    busy: Boolean,
+    onPick: (Tone) -> Unit,
+    onDismiss: () -> Unit
+) {
+    RmblrSheet("Say it another way", onDismiss) {
+        Text(
+            text = item.rawText,
+            color = TextMid,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 3
+        )
+        Spacer(Modifier.height(Space.lg))
+        if (busy) {
+            Text("Rewriting…", color = Accent, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            SheetOptions {
+                tones.forEach { tone ->
+                    SheetOption(
+                        title = tone.name,
+                        supporting = tone.description,
+                        selected = false,
+                        onClick = { onPick(tone) }
+                    )
                 }
             }
         }
@@ -354,7 +472,8 @@ private fun EmptyState(headline: String, body: String) {
 fun HistoryCard(
     item: DictationHistoryItem,
     onCopy: (String) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onRedo: (() -> Unit)? = null
 ) {
     // Locale.getDefault() is not observable state, so a composable that reads it keeps
     // formatting dates in the old locale after the user changes theirs. The
@@ -374,6 +493,16 @@ fun HistoryCard(
             Text(label, color = TextMid, style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.width(Space.sm))
             Text(dateStr, color = TextLow, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+            if (onRedo != null) {
+                IconButton(onClick = onRedo, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.Autorenew,
+                        contentDescription = "Say it another way",
+                        tint = TextMid,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
             IconButton(onClick = { onCopy(item.cleanedText) }, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = TextMid, modifier = Modifier.size(16.dp))
             }

@@ -55,6 +55,7 @@ import io.github.pastdaking.rmblr.ui.theme.Accent
 import io.github.pastdaking.rmblr.ui.theme.Alert
 import io.github.pastdaking.rmblr.ui.theme.Good
 import io.github.pastdaking.rmblr.ui.theme.Ink
+import io.github.pastdaking.rmblr.ui.theme.Scrim
 import io.github.pastdaking.rmblr.ui.theme.OnAccent
 import io.github.pastdaking.rmblr.ui.theme.Surface
 import io.github.pastdaking.rmblr.ui.theme.TextHigh
@@ -218,7 +219,7 @@ private fun WorkingRing(size: Dp = ORB_SIZE) {
 @Composable
 fun OrbFan(
     centre: DpOffset,
-    items: List<Tone>,
+    items: List<String>,
     highlighted: Int,
     openRight: Boolean,
     modifier: Modifier = Modifier
@@ -228,9 +229,8 @@ fun OrbFan(
     val chipHeight = 34.dp
     val margin = 8.dp
 
-    // Always a dark wash, whatever the theme. In light mode the scrim used to be the light
-    // Ink, which dimmed nothing and left white chips floating unreadably over the keyboard.
-    BoxWithConstraints(modifier = modifier.fillMaxSize().background(Ink.copy(alpha = 0.55f))) {
+    // Always a dark wash, whatever the theme — see [Scrim].
+    BoxWithConstraints(modifier = modifier.fillMaxSize().background(Scrim.copy(alpha = 0.42f))) {
         val maxX = maxWidth - chipWidth - margin
         val maxY = maxHeight - chipHeight - margin
 
@@ -247,7 +247,7 @@ fun OrbFan(
             val y = (centre.y + dy - chipHeight / 2).coerceIn(margin, maxOf(margin, maxY))
 
             ActionChip(
-                label = preset.name,
+                label = preset,
                 active = highlighted == index,
                 modifier = Modifier
                     .width(chipWidth)
@@ -324,7 +324,7 @@ fun TranslationBubble(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .fillMaxSize()
-            .background(Ink.copy(alpha = 0.72f))
+            .background(Scrim.copy(alpha = 0.58f))
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },

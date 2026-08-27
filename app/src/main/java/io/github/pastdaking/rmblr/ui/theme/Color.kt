@@ -99,6 +99,17 @@ val AccentWash: Color get() = Skin.dynamic?.accentWash
 val Alert: Color get() = if (Skin.dark) Color(0xFFE05561) else Color(0xFFD03A48)
 val Good: Color get() = if (Skin.dark) Color(0xFF4FBF87) else Color(0xFF2E9B67)
 
+/**
+ * The wash behind the orb's arc and the translation bubble.
+ *
+ * Always dark, never derived from the theme. It used to be `Ink`, which is very nearly
+ * white in light mode — so the thing meant to dim the screen behind a menu instead threw
+ * a 55% white sheet over it. In a dark room at night that is a flashbang, and it is the
+ * exact opposite of what a scrim is for. It is also deliberately gentler than it was:
+ * enough to push the page back, not enough to hide it.
+ */
+val Scrim: Color get() = Color(0xFF07080A)
+
 /** Text and glyphs drawn ON the accent. Always light: the accent stays dark enough. */
 val OnAccent: Color get() = Skin.dynamic?.onAccent ?: Color(0xFFFFFFFF)
 

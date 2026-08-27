@@ -8,6 +8,16 @@ import kotlinx.coroutines.flow.asStateFlow
 
 enum class OrbPhase { IDLE, MENU, RECORDING, WORKING, DONE, FAILED }
 
+/**
+ * What the orb does when you use it.
+ *
+ * The gestures are identical in both — tap to speak, hold for the arc, flick to pick —
+ * only the meaning of the arc changes. In [DICTATE] the arc offers tones; in [TRANSLATE]
+ * it offers languages, and whatever you say comes out in the one you flicked towards.
+ * Keeping the muscle memory the same across both was the point.
+ */
+enum class OrbMode { DICTATE, TRANSLATE }
+
 enum class OrbDirection { UP, DOWN, LEFT, RIGHT }
 
 /**
@@ -58,6 +68,19 @@ object OrbState {
         return at > 0L && System.currentTimeMillis() - at < windowMs
     }
 
+    private val _mode = MutableStateFlow(OrbMode.DICTATE)
+    val mode: StateFlow<OrbMode> = _mode.asStateFlow()
+
+    fun setMode(mode: OrbMode) {
+        _mode.value = mode
+    }
+
+    fun toggleMode(): OrbMode {
+        val next = if (_mode.value == OrbMode.DICTATE) OrbMode.TRANSLATE else OrbMode.DICTATE
+        _mode.value = next
+        return next
+    }
+
     /** Package of whatever you are typing in, so the orb can offer the right actions. */
     private val _currentPackage = MutableStateFlow<String?>(null)
     val currentPackage: StateFlow<String?> = _currentPackage.asStateFlow()
@@ -105,6 +128,38 @@ class OrbPrefs(context: Context) {
         prefs.edit().putString(key(direction), preset.name).apply()
     }
 
+    /**
+     * Which mode the orb was left in, so a double tap survives the app being killed.
+     */
+    var mode: OrbMode
+        get() = runCatching { OrbMode.valueOf(prefs.getString("mode", "DICTATE")!!) }
+            .getOrDefault(OrbMode.DICTATE)
+        set(value) = prefs.edit().putString("mode", value.name).apply()
+
+    /**
+     * The languages the arc offers in translate mode.
+     *
+     * Five at most, for the same reason the tone arc caps at five: every extra chip
+     * narrows the angle you have to aim at, and the whole point of a flick is that you
+     * do not have to look.
+     */
+    var fanLanguages: List<String>
+        get() = (prefs.getString("fan_languages", null) ?: DEFAULT_FAN_LANGUAGES)
+            .split('|').map { it.trim() }.filter { it.isNotEmpty() }.take(5)
+        set(value) = prefs.edit()
+            .putString("fan_languages", value.map { it.trim() }.filter { it.isNotEmpty() }.take(5).joinToString("|"))
+            .apply()
+
+    /**
+     * Keep the orb on screen even when nothing has the cursor.
+     *
+     * Off by default, because an orb that is always there is in the way. On for the
+     * people who would rather it never went anywhere.
+     */
+    var alwaysVisible: Boolean
+        get() = prefs.getBoolean("always_visible", false)
+        set(value) = prefs.edit().putBoolean("always_visible", value).apply()
+
     /** The action a plain tap uses. */
     fun tapAction(): CleanupPreset {
         val stored = prefs.getString("tap", null)
@@ -139,6 +194,10 @@ class OrbPrefs(context: Context) {
         set(value) = prefs.edit().putFloat("orb_bias", value.coerceIn(0.05f, 0.9f)).apply()
 
     private fun key(d: OrbDirection) = "dir_${d.name.lowercase()}"
+
+    private companion object {
+        const val DEFAULT_FAN_LANGUAGES = "English|Spanish|French|isiZulu|Japanese"
+    }
 
     private fun default(d: OrbDirection) = when (d) {
         OrbDirection.UP -> CleanupPreset.FORMAL_EMAIL

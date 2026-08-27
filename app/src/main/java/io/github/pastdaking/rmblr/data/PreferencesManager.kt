@@ -28,6 +28,9 @@ class PreferencesManager private constructor(context: Context) {
     private val _languageFlow = MutableStateFlow(getSpokenLanguage())
     val languageFlow: StateFlow<String> = _languageFlow.asStateFlow()
 
+    private val _dictationLanguageFlow = MutableStateFlow(getDictationLanguage())
+    val dictationLanguageFlow: StateFlow<String> = _dictationLanguageFlow.asStateFlow()
+
     private val _translateEnabledFlow = MutableStateFlow(isTranslateEnabled())
     val translateEnabledFlow: StateFlow<Boolean> = _translateEnabledFlow.asStateFlow()
 
@@ -199,6 +202,21 @@ class PreferencesManager private constructor(context: Context) {
         setSpokenLanguage(languageFor(code).label.takeIf { code.isNotBlank() } ?: "")
     }
 
+    /**
+     * Write the dictation in a DIFFERENT language from the one it was spoken in.
+     *
+     * Blank means "whatever I said", which is what almost everyone wants. Set it and
+     * every dictation is translated on its way into the field — speak English, type
+     * Japanese. It reuses the translation provider, so it costs one extra call and only
+     * when it is switched on.
+     */
+    fun getDictationLanguage(): String = prefs.getString("dictation_out_language", "") ?: ""
+
+    fun setDictationLanguage(name: String) {
+        prefs.edit().putString("dictation_out_language", name.trim()).apply()
+        _dictationLanguageFlow.value = name.trim()
+    }
+
     fun getTranscriptionMode(): TranscriptionMode {
         val name = prefs.getString("transcription_mode", TranscriptionMode.POST_PROCESS_CLEANUP.name)
         return try {
@@ -293,9 +311,6 @@ class PreferencesManager private constructor(context: Context) {
     fun isHapticEnabled(): Boolean = prefs.getBoolean("haptic_feedback", true)
     fun setHapticEnabled(enabled: Boolean) = prefs.edit().putBoolean("haptic_feedback", enabled).apply()
 
-    fun isSoundEnabled(): Boolean = prefs.getBoolean("sound_effects", false)
-    fun setSoundEnabled(enabled: Boolean) = prefs.edit().putBoolean("sound_effects", enabled).apply()
-
     fun isFloatingAssistantEnabled(): Boolean = prefs.getBoolean("floating_assistant_enabled", false)
     fun setFloatingAssistantEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("floating_assistant_enabled", enabled).apply()
@@ -304,9 +319,6 @@ class PreferencesManager private constructor(context: Context) {
 
     fun isAutoCapitalizeEnabled(): Boolean = prefs.getBoolean("auto_capitalize", true)
     fun setAutoCapitalizeEnabled(enabled: Boolean) = prefs.edit().putBoolean("auto_capitalize", enabled).apply()
-
-    fun getKeyboardTheme(): String = prefs.getString("keyboard_theme", "dark_futuristic") ?: "dark_futuristic"
-    fun setKeyboardTheme(theme: String) = prefs.edit().putString("keyboard_theme", theme).apply()
 
     companion object {
         @Volatile
