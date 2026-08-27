@@ -1,0 +1,18 @@
+Speak into any Android app. RMBLR writes it down, tidies it up, and puts the text straight into the box you were typing in.
+
+A small orb appears only when a text field has the cursor, never sitting on your home screen. Tap it and talk. Hold it and an arc of tones fans out — professional, casual, bullets, summary — and flicking straight at one skips the menu entirely. Drag it anywhere on screen and it stays there.
+
+Double tap the orb and it becomes a translator. Say it in English and have it land in Japanese, Spanish, isiZulu or anything else, written directly into WhatsApp. Hold it in that mode and the arc shows your languages instead of your tones. Copy text in any app and one tap reads it back to you in your language.
+
+There is no account and no subscription. You paste your own API key and the app talks directly to the model you chose. Nothing passes through a server belonging to the developer.
+
+Choose from Gemini, Groq, Mistral, OpenRouter, OpenAI, or any OpenAI-compatible endpoint you host yourself. Gemini's streaming transcription puts words on screen while you are still talking.
+
+Other things it does:
+- Profiles that change the four gestures depending on which app you are typing in
+- A dictionary of names and jargon so they are spelled the way you spell them
+- Snippets you trigger by saying their name
+- Searchable history, with the ability to re-run any dictation in a different tone
+- Material You colours taken from your wallpaper, plus a true OLED black theme
+
+Open source under the MIT licence.

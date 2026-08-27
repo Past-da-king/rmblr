@@ -1,0 +1,1 @@
+Dictate into any app, and translate as you speak. Your own API key, no account.

@@ -3,9 +3,14 @@
 # RMBLR
 
 Speak into any Android app. RMBLR writes it down, tidies it up, and puts the text
-straight into the box you were typing in.
+straight into the box you were typing in — in your language, or in someone else's.
 
-No account. No subscription. Your own Gemini API key, talking directly to Google.
+Double tap the orb and it translates instead: say it in English, have it land in
+Japanese, Spanish, isiZulu or anything else, straight into WhatsApp.
+
+No account. No subscription. Your own API key, talking directly to whichever model
+you pick — Gemini, Groq, Mistral, OpenRouter, OpenAI, or any OpenAI-compatible
+endpoint you host yourself.
 
 **[Download the latest APK →](https://github.com/Past-da-king/rmblr/releases/latest)**
 
