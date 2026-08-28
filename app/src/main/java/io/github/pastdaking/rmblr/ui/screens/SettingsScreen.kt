@@ -30,11 +30,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,6 +70,7 @@ import io.github.pastdaking.rmblr.data.SPOKEN_LANGUAGES
 import io.github.pastdaking.rmblr.data.TARGET_LANGUAGES
 import io.github.pastdaking.rmblr.data.TextProvider
 import io.github.pastdaking.rmblr.data.TranscriptionEngine
+import io.github.pastdaking.rmblr.update.UpdateRepository
 import io.github.pastdaking.rmblr.ui.components.Hairline
 import io.github.pastdaking.rmblr.ui.components.Panel
 import io.github.pastdaking.rmblr.ui.components.Radius
@@ -108,7 +111,9 @@ private enum class SettingsGroup(
 ) {
     VOICE("Models & keys", "Who does the listening and the translating, and their keys", Icons.Default.RecordVoiceOver),
     APPEARANCE("Appearance", "Light, dark, OLED black, wallpaper colours", Icons.Default.Palette),
-    TYPING("Typing", "Vibration and capitalisation", Icons.Default.Keyboard)
+    TYPING("Typing", "Vibration and capitalisation", Icons.Default.Keyboard),
+    UPDATES("Updates", "What version you are on, and whether there is a newer one", Icons.Default.SystemUpdate),
+    FEEDBACK("Feedback", "Tell whoever builds this what is broken or missing", Icons.Default.ChatBubbleOutline)
 }
 
 @Composable
@@ -136,7 +141,7 @@ fun SettingsScreen(
         if (group == null) {
             ScreenHeader(
                 title = "Settings",
-                subtitle = "Four things to set, then you can forget this page exists."
+                subtitle = "Set the first three once, then you can forget this page exists."
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
@@ -181,6 +186,10 @@ fun SettingsScreen(
                 SettingsGroup.VOICE -> VoiceSettings(prefsManager)
                 SettingsGroup.APPEARANCE -> AppearanceSettings()
                 SettingsGroup.TYPING -> TypingSettings(prefsManager)
+                SettingsGroup.UPDATES -> UpdatesSettings(
+                    repo = UpdateRepository.getInstance(LocalContext.current)
+                )
+                SettingsGroup.FEEDBACK -> FeedbackSettings(prefsManager)
             }
         }
     }

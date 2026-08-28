@@ -57,6 +57,7 @@ import io.github.pastdaking.rmblr.data.DictationHistoryItem
 import io.github.pastdaking.rmblr.data.HistoryRepository
 import io.github.pastdaking.rmblr.data.DictionaryRepository
 import io.github.pastdaking.rmblr.data.PreferencesManager
+import io.github.pastdaking.rmblr.update.UpdateRepository
 import io.github.pastdaking.rmblr.data.TranscriptionMode
 import io.github.pastdaking.rmblr.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.CoroutineScope
@@ -209,6 +210,13 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
         startForegroundNotification()
         addOverlay()
         watchVisibility()
+
+        // The daily update check, from the one part of RMBLR that is reliably running.
+        // The orb is a foreground service most people leave on all day, so this catches
+        // the person who never opens the app itself — which, once it is set up, is the
+        // point of the app. Throttled to once a day inside the repository, so starting
+        // the service repeatedly costs nothing.
+        scope.launch { runCatching { UpdateRepository.getInstance(this@OrbOverlayService).checkAndNotify() } }
     }
 
     override fun onDestroy() {

@@ -48,6 +48,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +64,8 @@ import androidx.core.content.ContextCompat
 import io.github.pastdaking.rmblr.data.HistoryRepository
 import io.github.pastdaking.rmblr.data.PreferencesManager
 import io.github.pastdaking.rmblr.ui.components.PrimaryAction
+import io.github.pastdaking.rmblr.ui.components.copyToClipboard
+import io.github.pastdaking.rmblr.ui.components.openUrl
 import io.github.pastdaking.rmblr.ui.components.Space
 import io.github.pastdaking.rmblr.ui.screens.HistoryScreen
 import io.github.pastdaking.rmblr.ui.screens.HomeScreen
@@ -70,6 +73,12 @@ import io.github.pastdaking.rmblr.ui.screens.SettingsScreen
 import io.github.pastdaking.rmblr.ui.screens.OnboardingPrefs
 import io.github.pastdaking.rmblr.ui.screens.OnboardingScreen
 import io.github.pastdaking.rmblr.ui.screens.ProfilesScreen
+import io.github.pastdaking.rmblr.ui.screens.UpdateAvailableSheet
+import io.github.pastdaking.rmblr.ui.screens.WhatsNewSheet
+import io.github.pastdaking.rmblr.update.ChangelogEntry
+import io.github.pastdaking.rmblr.update.UpdateNotifier
+import io.github.pastdaking.rmblr.update.UpdateRepository
+import io.github.pastdaking.rmblr.update.UpdateStatus
 import io.github.pastdaking.rmblr.ui.theme.Accent
 import io.github.pastdaking.rmblr.ui.theme.AccentWash
 import io.github.pastdaking.rmblr.ui.theme.Ink
@@ -89,6 +98,20 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var prefsManager: PreferencesManager
     private lateinit var historyRepo: HistoryRepository
+    private lateinit var updateRepo: UpdateRepository
+
+    /**
+     * The release notes for the version that has just been installed, if this is the
+     * first launch on it.
+     *
+     * Read once here rather than inside setContent: it is a one-shot that stamps itself
+     * as seen when read, and a recomposition asking a second time would get null and
+     * quietly lose the sheet.
+     */
+    private var whatsNew: ChangelogEntry? = null
+
+    /** True when we were launched by tapping the "there is a new RMBLR" notification. */
+    private var openedForUpdate = false
 
     /**
      * Start the orb again if the switch says it should be running.
@@ -123,6 +146,11 @@ class MainActivity : ComponentActivity() {
 
         prefsManager = PreferencesManager.getInstance(this)
         historyRepo = HistoryRepository.getInstance(this)
+        updateRepo = UpdateRepository.getInstance(this)
+
+        whatsNew = updateRepo.consumeWhatsNew()
+        openedForUpdate = intent?.getBooleanExtra(UpdateNotifier.EXTRA_SHOW_UPDATE, false) == true
+        if (openedForUpdate) UpdateNotifier.dismiss(this)
 
         setContent {
             MyApplicationTheme {
@@ -171,6 +199,55 @@ class MainActivity : ComponentActivity() {
                     NavItem("History", Icons.Default.History, "nav_tab_history"),
                     NavItem("Settings", Icons.Default.Settings, "nav_tab_settings")
                 )
+
+                // ---------------------------------------------------------- updates
+                //
+                // Two sheets that must never be up together. What's new is about the
+                // version you are already running and appears once, unprompted, the first
+                // time the app opens on it. The other is about a version you do not have
+                // yet, and only appears because you asked for it — from the notification,
+                // or from Settings.
+                var showWhatsNew by remember { mutableStateOf(whatsNew != null) }
+                var showUpdate by remember { mutableStateOf(openedForUpdate) }
+                val updateStatus by updateRepo.status.collectAsState()
+
+                // The once-a-day check. Nothing to catch: every failure is folded into
+                // the status, so a phone with no signal simply keeps the answer it had.
+                LaunchedEffect(Unit) { updateRepo.checkAndNotify() }
+
+                // Coming from the notification we know a release exists but not what is
+                // in it — the notification carried a headline, not the body.
+                LaunchedEffect(showUpdate) { if (showUpdate) updateRepo.check(force = true) }
+
+                val newRelease = (updateStatus as? UpdateStatus.Available)?.release
+
+                whatsNew?.let { entry ->
+                    if (showWhatsNew) {
+                        WhatsNewSheet(entry = entry, onDismiss = { showWhatsNew = false })
+                    }
+                }
+
+                if (showUpdate && !showWhatsNew && newRelease != null) {
+                    UpdateAvailableSheet(
+                        release = newRelease,
+                        onDownload = {
+                            // Falling back to the clipboard rather than doing nothing:
+                            // a phone with no browser is rare, but a button that visibly
+                            // does nothing is worse than one that gives you the link.
+                            if (!openUrl(this@MainActivity, newRelease.downloadUrl)) {
+                                copyToClipboard(
+                                    this@MainActivity, "RMBLR download", newRelease.downloadUrl
+                                )
+                            }
+                            showUpdate = false
+                        },
+                        onSkip = {
+                            updateRepo.skip(newRelease.version)
+                            showUpdate = false
+                        },
+                        onDismiss = { showUpdate = false }
+                    )
+                }
 
                 Scaffold(
                     containerColor = Ink,

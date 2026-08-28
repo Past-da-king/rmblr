@@ -12,6 +12,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -239,6 +240,7 @@ private fun OrbArt() {
                     .height(48.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(Surface)
+                    .border(1.dp, Line, RoundedCornerShape(24.dp))
                     .padding(horizontal = Space.lg)
             ) {
                 Box(modifier = Modifier.size(width = 2.dp, height = 20.dp).background(Accent))
@@ -295,6 +297,7 @@ private fun GestureArt(cycling: Boolean = false) {
                     .height(chipHeight)
                     .clip(RoundedCornerShape(16.dp))
                     .background(if (index == 2) Accent else Surface)
+                    .border(1.dp, if (index == 2) Accent else Line, RoundedCornerShape(16.dp))
             ) {
                 Crossfade(targetState = label, label = "arc_chip") { shown ->
                     Text(
@@ -378,6 +381,7 @@ private fun SpeakItWritesArt() {
                 modifier = Modifier
                     .clip(RoundedCornerShape(14.dp))
                     .background(Surface)
+                    .border(1.dp, Line, RoundedCornerShape(14.dp))
                     .padding(horizontal = Space.xl, vertical = Space.md)
             )
         }
@@ -429,6 +433,7 @@ private fun LanguageChip(label: String, tint: androidx.compose.ui.graphics.Color
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .background(fill)
+            .border(1.dp, if (fill == Surface) Line else fill, RoundedCornerShape(12.dp))
             .padding(horizontal = Space.lg, vertical = Space.sm)
     )
 }
@@ -441,6 +446,7 @@ private fun ProfileRow(app: String, tone: String, tint: androidx.compose.ui.grap
             .width(260.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(Surface)
+            .border(1.dp, Line, RoundedCornerShape(14.dp))
             .padding(Space.lg)
     ) {
         Text(app, color = TextHigh, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
@@ -521,6 +527,7 @@ private fun PermissionCard(title: String, body: String, granted: Boolean, onOpen
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(Surface)
+            .border(1.dp, Line, RoundedCornerShape(14.dp))
             .clickable(enabled = !granted) { onOpen() }
             .padding(Space.lg)
     ) {
@@ -587,6 +594,7 @@ private fun ApiKeyPage() {
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
                 .background(Surface)
+                .border(1.dp, Line, RoundedCornerShape(14.dp))
                 .padding(Space.lg)
         ) {
             Text("Where to get one", color = TextHigh, style = MaterialTheme.typography.titleMedium)
