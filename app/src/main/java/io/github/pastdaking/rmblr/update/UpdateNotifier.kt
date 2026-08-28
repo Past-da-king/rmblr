@@ -1,6 +1,7 @@
 package io.github.pastdaking.rmblr.update
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -64,6 +65,9 @@ object UpdateNotifier {
      * Post the notification for [release]. A no-op if notifications are not permitted,
      * so the background check never needs to care whether the permission was granted.
      */
+    // canPost() is the permission check, one line below. Lint cannot follow a guard that
+    // lives behind a helper call, so it reports the notify() as unguarded; it is not.
+    @SuppressLint("MissingPermission")
     fun notify(context: Context, release: ReleaseInfo) {
         if (!canPost(context)) return
         ensureChannel(context)
