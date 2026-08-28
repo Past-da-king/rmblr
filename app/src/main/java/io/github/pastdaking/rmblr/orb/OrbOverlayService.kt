@@ -110,6 +110,17 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     private var appliedSize = -1
     private var orbSize by mutableStateOf(52.dp)
 
+    // How see-through the orb is, and whether it has been ignored long enough to get out
+    // of the way. Read from prefs in the visibility loop rather than at start-up, for the
+    // same reason size is: the home screen writes straight to prefs and nobody should
+    // have to restart the orb to see a slider take effect.
+    private var orbOpacity by mutableStateOf(1f)
+    private var orbIdleOpacity by mutableStateOf(1f)
+    private var orbFaded by mutableStateOf(false)
+
+    /** When the orb was last touched, or last had something to do. */
+    private var lastActivityAt = System.currentTimeMillis()
+
     // Compose state, so the overlay redraws itself when the gesture handler changes
     // them; there is no other observer to push an update through.
     private var menuOpen by mutableStateOf(false)
@@ -290,7 +301,11 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                 // and leaves a minute later, is a feature.
                 val justCopied = prefs.isTranslateEnabled() && OrbState.copiedRecently(ARM_WINDOW_MS)
 
-                val show = (OrbState.shouldBeVisible() || justCopied || orbPrefs.alwaysVisible) &&
+                // "Keep it on screen" is an instruction, not a preference to be
+                // second-guessed, so it wins over the keyboard rule rather than being
+                // filtered by it.
+                val show = (OrbState.shouldBeVisible(orbPrefs.requireKeyboard) ||
+                    justCopied || orbPrefs.alwaysVisible) &&
                     prefs.isFloatingAssistantEnabled()
 
                 translateMode = justCopied &&
@@ -306,11 +321,28 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                     applyPlacementFromPrefs()
                     applyOrbPosition()
                 }
+                orbOpacity = orbPrefs.opacity
+                orbIdleOpacity = orbPrefs.idleOpacity
+
+                // Anything that counts as the orb being in use — mid job, menu open,
+                // bubble up — keeps it awake without needing a touch.
+                val busy = OrbState.phase.value != OrbPhase.IDLE || menuOpen || bubbleOpen
+                if (busy) lastActivityAt = System.currentTimeMillis()
+
                 val v = rootView
                 if (v != null) {
                     val want = if (show) View.VISIBLE else View.GONE
-                    if (v.visibility != want) v.visibility = want
+                    if (v.visibility != want) {
+                        // Appearing counts as activity: an orb that arrives already
+                        // faded is one you never see arrive.
+                        if (want == View.VISIBLE) lastActivityAt = System.currentTimeMillis()
+                        v.visibility = want
+                    }
                 }
+
+                orbFaded = orbPrefs.idleFade && !busy &&
+                    System.currentTimeMillis() - lastActivityAt >= orbPrefs.idleAfterSeconds * 1000L
+
                 delay(150)
             }
         }
@@ -321,6 +353,11 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     private fun onTouch(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                // Touched, so it is awake — before anything else decides what the touch
+                // meant, because coming back to full has to look instant.
+                lastActivityAt = System.currentTimeMillis()
+                orbFaded = false
+
                 downRawX = event.rawX
                 downRawY = event.rawY
                 downAtMs = System.currentTimeMillis()
@@ -564,6 +601,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                         phase = phase,
                         amplitude = amplitude,
                         size = orbSize,
+                        opacity = orbOpacity,
                         modifier = Modifier.offset(
                             x = (orbOffset.x / density).dp,
                             y = (orbOffset.y / density).dp
@@ -576,7 +614,10 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                     phase = phase,
                     amplitude = amplitude,
                     size = orbSize,
-                    translate = translateMode || mode == OrbMode.TRANSLATE
+                    translate = translateMode || mode == OrbMode.TRANSLATE,
+                    opacity = orbOpacity,
+                    faded = orbFaded,
+                    idleOpacity = orbIdleOpacity
                 )
             }
         }

@@ -55,6 +55,25 @@ If something on that list matters to you more than the rest of it, say so — Fe
 
     val entries: List<ChangelogEntry> = listOf(
         ChangelogEntry(
+            version = "2.6.0",
+            headline = "The orb can get out of the way",
+            notes = """
+All of this came from the first issue anybody opened on the repo. Nothing here changes by itself — every switch below starts off, so the orb looks and behaves exactly as it did until you say otherwise.
+
+**Fade when idle**
+- Leave the orb alone and it **dims and shrinks** back out of the way. Touch it and it is instantly solid again.
+- **Settings on the home screen → Size and place** — turn it on, choose how long it waits, and how faint it gets.
+- It only fades what you see. The orb stays exactly as easy to hit while it is small.
+
+**Translucency as a setting**
+- A **Solid** slider in the same place, from fully opaque down to barely there. It applies all the time, not just when idle, and the preview above the slider moves with it.
+
+**Only with the keyboard**
+- A new switch next to *Keep it on screen*. With it on, the orb waits for the **keyboard to actually be up** rather than appearing the moment a text box takes the cursor.
+- It needs the accessibility service that RMBLR already uses to know you are in a text box — no new permission is asked for.
+"""
+        ),
+        ChangelogEntry(
             version = "2.5.3",
             headline = "It can tell you when there is a new one",
             notes = """

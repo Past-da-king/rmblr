@@ -4,9 +4,11 @@ import android.accessibilityservice.AccessibilityService
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 
 /**
  * The only Android API that can answer "is the cursor in a text box right now" and
@@ -44,11 +46,15 @@ class FieldWatcherService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         OrbState.setInputFocused(currentFieldIsEditable())
+        OrbState.setKeyboardVisible(keyboardIsUp())
     }
 
     override fun onDestroy() {
         if (instance === this) instance = null
         OrbState.setInputFocused(false)
+        // Nothing else can see the keyboard, so leave the answer as "no idea" rather
+        // than a stale "yes" that would keep the orb pinned on screen.
+        OrbState.setKeyboardVisible(false)
         super.onDestroy()
     }
 
@@ -66,10 +72,39 @@ class FieldWatcherService : AccessibilityService() {
                 // Knowing the app is free here and it is what per-app profiles run on.
                 OrbState.setCurrentPackage(event.packageName?.toString())
                 OrbState.setInputFocused(currentFieldIsEditable())
+                OrbState.setKeyboardVisible(keyboardIsUp())
                 noticeCopy(event)
+            }
+
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                // The keyboard going up or down is a window change and nothing else.
+                // None of the focus work above applies, so this branch is deliberately
+                // the cheap one.
+                OrbState.setKeyboardVisible(keyboardIsUp())
             }
         }
     }
+
+    /**
+     * Is the on-screen keyboard actually up right now?
+     *
+     * The only honest way to ask on modern Android. There is no public "is the IME
+     * showing" call for an app that is not the one being typed into: WindowInsets answer
+     * for your own window, and the orb's window deliberately never takes focus, so it
+     * would always be told no. Listing the windows and looking for the input-method one
+     * is what is left, and it needs nothing RMBLR does not already hold — the
+     * accessibility service is declared with flagRetrieveInteractiveWindows already,
+     * because findFocus needs it.
+     *
+     * A zero-height input-method window does not count: several keyboards, Samsung's
+     * included, keep theirs in the list while it is collapsed.
+     */
+    private fun keyboardIsUp(): Boolean = runCatching {
+        windows.any { w ->
+            w.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD &&
+                Rect().also { w.getBoundsInScreen(it) }.height() > 0
+        }
+    }.getOrDefault(false)
 
     /**
      * Spot the moment text goes to the clipboard, so the orb can appear then and only

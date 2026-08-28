@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -96,9 +97,19 @@ fun WaveMark(
     }
 }
 
+/** How small the orb gets once it has been ignored for a while. */
+private const val IDLE_SCALE = 0.72f
+
 /**
- * The orb itself. Solid at every phase, because a control you cannot see is a control
- * you cannot hit: the half-transparent version was unusable on a light background.
+ * The orb itself.
+ *
+ * Solid at every phase by default, because a control you cannot see is a control you
+ * cannot hit — the half-transparent version was unusable on a light background, and that
+ * is why [opacity] is a choice the owner makes rather than something the app decides.
+ *
+ * [faded] is the separate, temporary version of the same idea: it has been ignored for a
+ * while, so it gets out of the way until it is touched. It only ever scales what is
+ * drawn, never the window, so the thing stays exactly as easy to hit while it is small.
  */
 @Composable
 fun Orb(
@@ -107,12 +118,32 @@ fun Orb(
     modifier: Modifier = Modifier,
     size: Dp = ORB_SIZE,
     /** Show the globe instead of the wave: a tap will translate, not dictate. */
-    translate: Boolean = false
+    translate: Boolean = false,
+    /** How solid it is at rest. 1f is the original, opaque orb. */
+    opacity: Float = 1f,
+    /** True once it has sat unused long enough to shrink back out of the way. */
+    faded: Boolean = false,
+    /** What it fades down to. Ignored unless [faded]. */
+    idleOpacity: Float = 1f
 ) {
     val ring by animateFloatAsState(
         targetValue = if (phase == OrbPhase.RECORDING) 1f + amplitude.coerceIn(0f, 1f) * 0.35f else 1f,
         animationSpec = tween(90),
         label = "orb_ring"
+    )
+
+    // Slow out, quick back. Fading away should be something you half-notice; coming back
+    // has to feel like it answered you, so it is over before you have finished tapping.
+    val targetAlpha = (if (faded) minOf(opacity, idleOpacity) else opacity).coerceIn(0f, 1f)
+    val orbAlpha by animateFloatAsState(
+        targetValue = targetAlpha,
+        animationSpec = tween(if (faded) 600 else 140),
+        label = "orb_alpha"
+    )
+    val orbScale by animateFloatAsState(
+        targetValue = if (faded) IDLE_SCALE else 1f,
+        animationSpec = tween(if (faded) 600 else 140),
+        label = "orb_scale"
     )
 
     val body = when (phase) {
@@ -123,7 +154,16 @@ fun Orb(
         else -> Surface
     }
 
-    Box(contentAlignment = Alignment.Center, modifier = modifier.size(size)) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(size)
+            .graphicsLayer {
+                alpha = orbAlpha
+                scaleX = orbScale
+                scaleY = orbScale
+            }
+    ) {
         if (phase == OrbPhase.RECORDING) {
             Canvas(modifier = Modifier.matchParentSize()) {
                 drawCircle(color = Alert.copy(alpha = 0.22f), radius = (this.size.minDimension / 2f) * ring)

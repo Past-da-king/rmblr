@@ -94,6 +94,23 @@ object OrbState {
         _inputFocused.value = focused
     }
 
+    /**
+     * True while the on-screen keyboard is actually up.
+     *
+     * Not the same question as [inputFocused]. A field can hold the cursor with the
+     * keyboard dismissed — you tapped back, or you are on a hardware keyboard — and for
+     * some people that is exactly when the orb is in the way. Only the accessibility
+     * service can see this, so it is the only thing that writes here; if that service is
+     * off, nothing ever sets it and the setting that depends on it stays inert rather
+     * than hiding the orb forever.
+     */
+    private val _keyboardVisible = MutableStateFlow(false)
+    val keyboardVisible: StateFlow<Boolean> = _keyboardVisible.asStateFlow()
+
+    fun setKeyboardVisible(visible: Boolean) {
+        _keyboardVisible.value = visible
+    }
+
     fun setPhase(phase: OrbPhase, message: String? = null) {
         _phase.value = phase
         _message.value = message
@@ -106,9 +123,16 @@ object OrbState {
     /**
      * The orb is on screen while you are typing somewhere, or while it is busy with
      * something you started. It is never just sitting there over your home screen.
+     *
+     * [requireKeyboard] narrows the first half only: the cursor being in a field is no
+     * longer enough, the keyboard has to be up too. It deliberately does not narrow the
+     * second half — once you have started something, the orb is how you watch it finish,
+     * and dismissing the keyboard mid-dictation must not take it away.
      */
-    fun shouldBeVisible(): Boolean =
-        _inputFocused.value || _phase.value != OrbPhase.IDLE
+    fun shouldBeVisible(requireKeyboard: Boolean = false): Boolean {
+        val typing = _inputFocused.value && (!requireKeyboard || _keyboardVisible.value)
+        return typing || _phase.value != OrbPhase.IDLE
+    }
 }
 
 /**
@@ -160,6 +184,52 @@ class OrbPrefs(context: Context) {
         get() = prefs.getBoolean("always_visible", false)
         set(value) = prefs.edit().putBoolean("always_visible", value).apply()
 
+    /**
+     * How solid the orb is when it is sitting there doing nothing.
+     *
+     * 1f — solid — is the default, because that is what every existing install already
+     * looks like and an update has no business changing how somebody's screen looks.
+     * Turning it down is for people who would rather see through it than move it.
+     */
+    var opacity: Float
+        get() = prefs.getFloat("orb_opacity", 1f).coerceIn(MIN_OPACITY, 1f)
+        set(value) = prefs.edit().putFloat("orb_opacity", value.coerceIn(MIN_OPACITY, 1f)).apply()
+
+    /**
+     * Let it fade back and shrink once it has been ignored for a while.
+     *
+     * Off by default for the same reason as [opacity]. On, the orb drops to
+     * [idleOpacity] and gets a little smaller after [idleAfterSeconds] of nothing, and
+     * comes straight back to full the moment you touch it or it has something to do.
+     */
+    var idleFade: Boolean
+        get() = prefs.getBoolean("orb_idle_fade", false)
+        set(value) = prefs.edit().putBoolean("orb_idle_fade", value).apply()
+
+    /** How long "a while" is, in seconds. */
+    var idleAfterSeconds: Int
+        get() = prefs.getInt("orb_idle_after", 8).coerceIn(2, 60)
+        set(value) = prefs.edit().putInt("orb_idle_after", value.coerceIn(2, 60)).apply()
+
+    /**
+     * What it fades down to. Floored well above invisible on purpose: an orb you cannot
+     * find is an orb you cannot tap, and the touch target does not move when it fades.
+     */
+    var idleOpacity: Float
+        get() = prefs.getFloat("orb_idle_opacity", 0.3f).coerceIn(MIN_OPACITY, 1f)
+        set(value) = prefs.edit().putFloat("orb_idle_opacity", value.coerceIn(MIN_OPACITY, 1f)).apply()
+
+    /**
+     * Only show the orb while the on-screen keyboard is actually up.
+     *
+     * Off by default, because it is a narrowing of when the orb appears and it depends
+     * on the accessibility service being on. It also has no effect while
+     * [alwaysVisible] is set — that switch means what it says.
+     */
+    var requireKeyboard: Boolean
+        get() = prefs.getBoolean("orb_require_keyboard", false)
+        set(value) = prefs.edit().putBoolean("orb_require_keyboard", value).apply()
+
     /** The action a plain tap uses. */
     fun tapAction(): CleanupPreset {
         val stored = prefs.getString("tap", null)
@@ -197,6 +267,9 @@ class OrbPrefs(context: Context) {
 
     private companion object {
         const val DEFAULT_FAN_LANGUAGES = "English|Spanish|French|isiZulu|Japanese"
+
+        /** Below this it stops being translucent and starts being a lost button. */
+        const val MIN_OPACITY = 0.15f
     }
 
     private fun default(d: OrbDirection) = when (d) {

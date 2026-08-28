@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Accessibility
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Tune
@@ -176,6 +177,11 @@ fun HomeScreen(
     var orbSize by remember { mutableIntStateOf(orbPrefs.sizeDp) }
     var onLeft by remember { mutableStateOf(orbPrefs.onLeftEdge) }
     var bias by remember { mutableFloatStateOf(orbPrefs.verticalBias) }
+    var orbOpacity by remember { mutableFloatStateOf(orbPrefs.opacity) }
+    var idleFade by remember { mutableStateOf(orbPrefs.idleFade) }
+    var idleAfter by remember { mutableIntStateOf(orbPrefs.idleAfterSeconds) }
+    var idleOpacity by remember { mutableFloatStateOf(orbPrefs.idleOpacity) }
+    var keyboardOnly by remember { mutableStateOf(orbPrefs.requireKeyboard) }
 
     var canOverlay by remember { mutableStateOf(false) }
     var canWatch by remember { mutableStateOf(false) }
@@ -335,6 +341,29 @@ fun HomeScreen(
                     Switch(
                         checked = alwaysOn,
                         onCheckedChange = { orbPrefs.alwaysVisible = it; alwaysOn = it },
+                        colors = homeSwitchColours()
+                    )
+                }
+            )
+
+            Hairline(Modifier.padding(vertical = Space.md))
+
+            // A narrower rule than "a field has the cursor": the keyboard has to be up
+            // too. Off by default, and deliberately no effect while "Keep it on screen"
+            // is on, because that switch means what it says.
+            SettingRow(
+                label = "Only with the keyboard",
+                supporting = when {
+                    alwaysOn -> "Off while Keep it on screen is on"
+                    keyboardOnly -> "Hidden until the keyboard is actually up"
+                    else -> "Show it only while the keyboard is up, not just the cursor"
+                },
+                icon = Icons.Default.Keyboard,
+                trailing = {
+                    Switch(
+                        checked = keyboardOnly,
+                        enabled = !alwaysOn,
+                        onCheckedChange = { orbPrefs.requireKeyboard = it; keyboardOnly = it },
                         colors = homeSwitchColours()
                     )
                 }
@@ -627,7 +656,12 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxWidth().height(88.dp)
             ) {
-                Orb(phase = OrbPhase.IDLE, amplitude = 0f, size = orbSize.dp)
+                Orb(
+                    phase = OrbPhase.IDLE,
+                    amplitude = 0f,
+                    size = orbSize.dp,
+                    opacity = orbOpacity
+                )
             }
 
             Spacer(Modifier.height(Space.sm))
@@ -666,6 +700,87 @@ fun HomeScreen(
                 SideChoice("Left", onLeft) { onLeft = true; orbPrefs.onLeftEdge = true }
                 Spacer(Modifier.width(Space.sm))
                 SideChoice("Right", !onLeft) { onLeft = false; orbPrefs.onLeftEdge = false }
+            }
+
+            Spacer(Modifier.height(Space.md))
+
+            // See-through is a standing choice, not only something that happens after a
+            // timeout. The preview above it moves with the slider, because a number
+            // between 15 and 100 tells you nothing about whether you can still find it
+            // on a photograph.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Solid", color = TextMid, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
+                Slider(
+                    value = orbOpacity,
+                    onValueChange = { orbOpacity = it; orbPrefs.opacity = it },
+                    valueRange = 0.15f..1f,
+                    colors = sliderColours(),
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(Space.md))
+                Text(
+                    "${(orbOpacity * 100).toInt()}%",
+                    color = TextHigh,
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+
+            Spacer(Modifier.height(Space.lg))
+            Hairline()
+            Spacer(Modifier.height(Space.lg))
+
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Fade when idle", color = TextHigh, style = MaterialTheme.typography.bodyLarge)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "Dims and shrinks once you have left it alone. Touch it and it is back.",
+                        color = TextLow,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Spacer(Modifier.width(Space.md))
+                Switch(
+                    checked = idleFade,
+                    onCheckedChange = { orbPrefs.idleFade = it; idleFade = it },
+                    colors = homeSwitchColours()
+                )
+            }
+
+            if (idleFade) {
+                Spacer(Modifier.height(Space.md))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("After", color = TextMid, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
+                    Slider(
+                        value = idleAfter.toFloat(),
+                        onValueChange = { idleAfter = it.toInt(); orbPrefs.idleAfterSeconds = idleAfter },
+                        valueRange = 2f..60f,
+                        colors = sliderColours(),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(Space.md))
+                    Text("${idleAfter}s", color = TextHigh, style = MaterialTheme.typography.labelLarge)
+                }
+
+                Spacer(Modifier.height(Space.md))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Fades to", color = TextMid, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
+                    Slider(
+                        value = idleOpacity,
+                        onValueChange = { idleOpacity = it; orbPrefs.idleOpacity = it },
+                        valueRange = 0.15f..1f,
+                        colors = sliderColours(),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(Space.md))
+                    Text(
+                        "${(idleOpacity * 100).toInt()}%",
+                        color = TextHigh,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             }
 
             Spacer(Modifier.height(Space.lg))
