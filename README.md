@@ -14,6 +14,8 @@ endpoint you host yourself.
 
 **[Download the latest APK →](https://github.com/Past-da-king/rmblr/releases/latest)**
 
+Once it is installed it tells you itself when there is a newer one.
+
 ---
 
 ## What it does
@@ -57,6 +59,32 @@ The clipboard is read **at the moment you tap and at no other time**. Android do
 let an app read the clipboard in the background, and RMBLR does not try to work around
 that — it borrows input focus for a fraction of a second on your tap, reads, and hands
 focus straight back.
+
+### It tells you when there is a new one
+
+RMBLR is not on an app store, so nothing used to tell you a newer version existed —
+you had to remember to come back to this page and look.
+
+**Settings → Updates** asks GitHub about once a day and puts a notification in your
+shade when there is something newer than what you are running. Tap the notification and
+you get the release notes first, in the app, before anything downloads; tap **Download**
+on the notification and it goes straight to your browser. You can turn the checking off,
+or skip a single version and not be asked about it again.
+
+The check is unauthenticated and reads one public endpoint. It sends nothing about you
+or your phone. The app **cannot** install anything by itself — the APK lands in your
+browser's downloads and you install it, deliberately, the same as the first time.
+
+After an update, the app opens once on a sheet saying what changed and where this is
+going. Once per version, then never again.
+
+### Feedback
+
+**Settings → Feedback** — say what is broken, what is missing, or what is not making
+sense. It writes the report and opens a prefilled GitHub issue, with the version, your
+Android version and your phone model attached (there is a switch to leave those out) and
+never an API key. No GitHub account? Copy the report and send it however you like.
+Nothing is sent anywhere until you press one of the two buttons.
 
 ---
 
