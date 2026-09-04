@@ -756,7 +756,16 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                         preset = CleanupPreset.SMART_CLEAN
                     )
                 )
-                val written = FieldWatcherService.instance?.insertAtCursor(cleaned) == true
+                val watcher = FieldWatcherService.instance
+                val written = watcher?.insertAtCursor(cleaned) == true
+                // The failure message promises the words are on the clipboard. With the
+                // accessibility service off nothing has put them there, so do it here —
+                // otherwise the promise is a lie and the dictation is simply gone.
+                if (!written && watcher == null) {
+                    runCatching {
+                        clipboard?.setPrimaryClip(ClipData.newPlainText("RMBLR", cleaned))
+                    }
+                }
                 OrbState.setPhase(
                     if (written) OrbPhase.DONE else OrbPhase.FAILED,
                     if (written) null else "Copied. Turn on RMBLR in Accessibility to paste for you."

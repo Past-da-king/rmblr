@@ -71,6 +71,11 @@ All of this came from the first issue anybody opened on the repo. Nothing here c
 **Only with the keyboard**
 - A new switch next to *Keep it on screen*. With it on, the orb waits for the **keyboard to actually be up** rather than appearing the moment a text box takes the cursor.
 - It needs the accessibility service that RMBLR already uses to know you are in a text box — no new permission is asked for.
+
+**The orb turning up late, or not at all**
+- It **appears when the box takes the cursor** now, instead of waiting for you to type a character first. It was asking Android one time, at the moment a field was tapped, and Android often has not caught up by then; it now keeps asking for a moment afterwards.
+- Boxes it used to miss entirely — **search bars in launchers, fields inside a web page, and apps drawn with Compose** — are found, and if all else fails the keyboard being up is enough on its own.
+- If a dictation could not be written into the field, it is now genuinely **on the clipboard**, as the message has always claimed. Before, with the accessibility service off, it was not.
 """
         ),
         ChangelogEntry(
