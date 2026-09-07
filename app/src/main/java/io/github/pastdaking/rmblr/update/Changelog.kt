@@ -55,6 +55,23 @@ If something on that list matters to you more than the rest of it, say so — Fe
 
     val entries: List<ChangelogEntry> = listOf(
         ChangelogEntry(
+            version = "2.6.1",
+            headline = "Holding the orb works again, and you can call one back",
+            notes = """
+Two things from the issues, both reported by the same person testing on a Galaxy S24.
+
+**Holding the orb no longer makes it disappear**
+- With **only show with the keyboard** turned on, holding the orb showed the tone arc for a split second and then everything vanished.
+- Holding the orb hides the keyboard, and the orb was taking that as its cue to leave — pulling the arc out from under the gesture that had just opened it.
+- Being in use now outranks the keyboard rule. While the arc is open, a bubble is up, or a job is running, the orb stays put.
+
+**Hold to throw away a recording you did not mean to start**
+- Tap it by accident and there was no way back: tapping again finished the recording and pasted the silence.
+- **Hold the orb while it is recording** and it stops and discards. A firmer buzz says it is gone.
+- Tap still finishes and inserts, as before. A quick double tap still cancels and swaps between dictate and translate.
+""".trimIndent()
+        ),
+        ChangelogEntry(
             version = "2.6.0",
             headline = "The orb can get out of the way",
             notes = """

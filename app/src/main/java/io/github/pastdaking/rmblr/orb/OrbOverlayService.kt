@@ -132,6 +132,8 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     private var fanLanguages = emptyList<String>()
     private var fanOpensRight by mutableStateOf(false)
     private var dragging = false
+    /** Set when a hold cancelled a recording, so the matching ACTION_UP does nothing. */
+    private var cancelledByHold = false
     private var downRawX = 0f
     private var downRawY = 0f
     private var downAtMs = 0L
@@ -301,11 +303,18 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                 // and leaves a minute later, is a feature.
                 val justCopied = prefs.isTranslateEnabled() && OrbState.copiedRecently(ARM_WINDOW_MS)
 
+                // Anything that counts as the orb being IN USE — mid job, tone arc open,
+                // bubble up. Computed before `show` because it has to override the
+                // keyboard rule: holding the orb hides the keyboard, and issue #4 was
+                // that doing so yanked the orb out from under the gesture that opened
+                // the arc. You cannot pick a tone from a menu that vanishes.
+                val busy = OrbState.phase.value != OrbPhase.IDLE || menuOpen || bubbleOpen
+
                 // "Keep it on screen" is an instruction, not a preference to be
                 // second-guessed, so it wins over the keyboard rule rather than being
                 // filtered by it.
                 val show = (OrbState.shouldBeVisible(orbPrefs.requireKeyboard) ||
-                    justCopied || orbPrefs.alwaysVisible) &&
+                    busy || justCopied || orbPrefs.alwaysVisible) &&
                     prefs.isFloatingAssistantEnabled()
 
                 translateMode = justCopied &&
@@ -324,9 +333,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                 orbOpacity = orbPrefs.opacity
                 orbIdleOpacity = orbPrefs.idleOpacity
 
-                // Anything that counts as the orb being in use — mid job, menu open,
-                // bubble up — keeps it awake without needing a touch.
-                val busy = OrbState.phase.value != OrbPhase.IDLE || menuOpen || bubbleOpen
+                // Being in use also keeps it awake without needing a touch.
                 if (busy) lastActivityAt = System.currentTimeMillis()
 
                 val v = rootView
@@ -368,8 +375,19 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
 
                 longPress = Runnable {
                     if (!dragging) {
-                        haptic(18)
-                        openMenu()
+                        if (OrbState.phase.value == OrbPhase.RECORDING) {
+                            // Issue #3: tapped it by accident and noticed too late for the
+                            // double tap. Tapping again would FINISH and paste the silence.
+                            // Hold is free here — the tone arc is meaningless once a
+                            // recording is already running — so hold means throw it away.
+                            haptic(28)
+                            dictation.cancel()
+                            OrbState.setPhase(OrbPhase.IDLE)
+                            cancelledByHold = true
+                        } else {
+                            haptic(18)
+                            openMenu()
+                        }
                     }
                 }
                 handler.postDelayed(longPress!!, 300)
@@ -439,6 +457,10 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                     } else {
                         snapToEdge()
                     }
+                } else if (cancelledByHold) {
+                    // The hold already threw the recording away; the finger coming back
+                    // up must not be read as a fresh tap.
+                    cancelledByHold = false
                 } else {
                     val recording = OrbState.phase.value == OrbPhase.RECORDING
                     val quickSecondTap = recording &&
