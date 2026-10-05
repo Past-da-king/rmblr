@@ -112,9 +112,20 @@ class DictationController(
             val heard = live.finish()
             val raw = heard.getOrNull()?.trim().orEmpty()
             if (raw.isNotEmpty()) {
-                // A Live model cannot rewrite text, and the whole point of choosing it
-                // was to avoid a second round trip. So the transcript is the answer.
-                return Result.success(finished(raw, raw, translateTo))
+                // A Live model cannot rewrite text itself. With no tone asked for, the
+                // transcript is the answer and nothing else is called. With one, the
+                // words are already here, so the tone is a short text-only call on top —
+                // issue #5 was a tone silently dropped on the default engine.
+                if (instruction.isNullOrBlank() || apiKey.isBlank()) {
+                    return Result.success(finished(raw, raw, translateTo))
+                }
+                val polished = GeminiApiClient.postProcessText(
+                    inputText = raw,
+                    apiKey = apiKey,
+                    preset = CleanupPreset.CUSTOM,
+                    customPrompt = instruction
+                )
+                return Result.success(finished(raw, polished.getOrNull()?.takeIf { it.isNotBlank() } ?: raw, translateTo))
             }
             // The socket died, the key is wrong, or there was genuinely nothing there.
             // We still hold the audio, so drop to the batch engine rather than losing a

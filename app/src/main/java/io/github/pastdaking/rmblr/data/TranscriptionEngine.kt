@@ -11,7 +11,7 @@ package io.github.pastdaking.rmblr.data
  *  - [GEMINI_TRANSCRIBE_LIVE] is the default: a model built for this one job. Audio goes
  *    up the socket while you are still talking, and because it answers in text rather
  *    than speech there is no spoken reply to generate, wait for or pay for. It cannot
- *    rewrite text, so tone actions are off — which is stated plainly in the UI.
+ *    rewrite text itself, so a tone is applied afterwards with one short text call.
  *  - [GEMINI_LITE] is the one to pick when you want a tone. It is genuinely good at
  *    plain transcription for a fraction of the price of the bigger models, but it only
  *    starts once you stop talking.
@@ -29,7 +29,7 @@ enum class TranscriptionEngine(
     val id: String,
     val label: String,
     val blurb: String,
-    /** Can a tone be applied on top? Live models cannot rewrite text at all. */
+    /** Can a tone be applied on top? Live models get theirs from a follow-up text call. */
     val supportsTone: Boolean,
     /** Does audio go up while you are still speaking, rather than after you stop? */
     val streams: Boolean,
@@ -39,14 +39,14 @@ enum class TranscriptionEngine(
     GEMINI_TRANSCRIBE_LIVE(
         id = "gemini-3.5-transcribe-live",
         label = "Gemini Transcribe Live — fastest",
-        blurb = "Built for exactly this job. Words appear while you speak and nothing is wasted, so it is the cheapest way to stream as well as the quickest. No tone actions.",
-        supportsTone = false,
+        blurb = "Built for exactly this job. Words appear while you speak and nothing is wasted, so it is the cheapest way to stream as well as the quickest. A tone adds one short text call after you stop.",
+        supportsTone = true,
         streams = true
     ),
     GEMINI_LITE(
         id = "gemini-3.5-flash-lite",
         label = "Gemini Flash Lite",
-        blurb = "Cheap, accurate, handles mixed languages, and the only streaming-free option that can apply a tone.",
+        blurb = "Cheap, accurate, handles mixed languages, and applies a tone in the same call as the transcript.",
         supportsTone = true,
         streams = false
     ),
@@ -54,7 +54,7 @@ enum class TranscriptionEngine(
         id = "gemini-3.1-flash-live-preview",
         label = "Gemini Live — older fast mode",
         blurb = "The previous streaming model. It still works, but it generates a spoken reply that is thrown away and billed, so Transcribe Live replaces it.",
-        supportsTone = false,
+        supportsTone = true,
         streams = true
     ),
     GROQ(
