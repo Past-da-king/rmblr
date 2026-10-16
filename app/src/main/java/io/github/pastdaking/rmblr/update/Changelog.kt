@@ -55,6 +55,18 @@ If something on that list matters to you more than the rest of it, say so — Fe
 
     val entries: List<ChangelogEntry> = listOf(
         ChangelogEntry(
+            version = "2.6.2",
+            headline = "AI Polish now works with live transcription",
+            notes = """
+One fix, from an issue reported by someone whose tone setting did nothing.
+
+**AI Polish and tones apply to live transcription**
+- With the default engine, Gemini Transcribe Live, **Clean & Smooth** and the other tones were ignored and you got the raw words back.
+- The words are already in hand when the stream ends, so the tone is now applied on top with one short text call.
+- A plain tap with no tone still makes no second call.
+""".trimIndent()
+        ),
+        ChangelogEntry(
             version = "2.6.1",
             headline = "Holding the orb works again, and you can call one back",
             notes = """
