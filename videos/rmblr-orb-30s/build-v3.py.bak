@@ -1,0 +1,518 @@
+#!/usr/bin/env python3
+"""RMBLR — "Smaller than your thumb."  30.0s · 1920x1080 · 60fps.  (v3)
+
+Ayanda on v2: "I see you kept the direction. This is good... But now try
+something Apple would make or Microsoft would make. Something stunning visually,
+dynamic — this is very static, there's no movement."
+
+THE MOVE THE WHOLE FILM IS BUILT ON — **the orb lifts off the phone.**
+
+RMBLR's orb is 52dp. At real size you cannot see what a hold or a flick actually
+does, which is why v2 read as a slideshow of a phone: the mechanic was always
+happening at 52dp. So this film does what Apple does with any component too small
+to read — it takes it OFF the device and makes it monumental.
+
+The film alternates two worlds, match-cut on the orb so it plays as one
+continuous push:
+
+    REALITY  — the phone as a real object in 3D, real apps, real result.
+    THE VOID — black space, the orb at 440px as a lit sphere, the mechanic
+               legible at last: the halo blooming, the voice as columns of
+               light, the five tones orbiting on a ring in perspective.
+
+Every dive is motivated by a touch and every surface is motivated by a result,
+so the abstraction never floats free of the product — the void shows you the
+mechanism, reality shows you the consequence, and the cut between them is always
+the same orb at the same size in the same place.
+
+  0.0- 3.0  VOID   · five bars of light fold into the orb
+  3.0- 6.0  REVEAL · one continuous pull-back — it was 52dp on a phone all along
+  6.0-10.3  TAP    · dive to hero for the listen, surface for the sentence landing
+ 10.3-15.4  HOLD   · the tones orbit the orb in space, then the result lands
+ 15.4-19.6  APPS   · three devices, one dolly, three different arcs
+ 19.6-22.6  DRAG   · thrown across the screen on a trail of light
+ 22.6-26.2  TRANSLATE · said in English, sent in isiZulu
+ 26.2-30.0  LOCKUP
+
+120 BPM. Exactly 30.000s, so the score he approved drops on unchanged.
+"""
+import math, os
+from apps import whatsapp, gmail, slack, keyboard, APPS_CSS
+from stagecss import STAGE_CSS
+
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
+W, H, FPS, DUR = 1920, 1080, 60, 30.0
+
+# Apps are authored at --dp:1px so one screen unit == one dp. Devices then carry
+# a plain scale, which is what lets the same app render at hero size and in the
+# little trio phones without recomputing a single coordinate.
+SCR_W, SCR_H = 393, 851
+PAD = 11
+DEV_W, DEV_H = SCR_W + PAD * 2, SCR_H + PAD * 2          # 415 x 873
+DEV_L, DEV_T = 552.5, 103.5                              # centred at (760, 540)
+
+ORB = 52
+ORB_SX, ORB_SY = 300.0, 430.0                            # parked, in screen space
+OWX, OWY = DEV_L + PAD + ORB_SX, DEV_T + PAD + ORB_SY    # 863.5, 544.5 in world space
+PARK_SX, PARK_SY = 128.0, 236.0                          # where the drag puts it
+
+HERO = 440.0                                             # the orb, lifted off
+HX, HY = 600.0, 540.0
+HERO_SCALE = HERO / ORB                                  # 8.46 — the match-cut ratio
+RING_R = 330.0
+
+BARS = [0.34, 0.66, 1.0, 0.72, 0.42]
+GAP = 100.0 / (5 * 2.2)
+BAR_X = [GAP * 0.6 + i * (GAP * 2) + GAP / 2 for i in range(5)]
+
+TONES = {"wa": ["Casual", "Clean up", "Grammar", "Bullets", "Summary"],
+         "gm": ["Professional", "Summary", "Clean up", "Grammar", "Bullets"],
+         "sl": ["Clean up", "Casual", "Bullets", "Professional", "Summary"]}
+
+def fan_angle(i, n=5):
+    return 180.0 - (-75.0 + (150.0 / (n - 1)) * i)       # opens left, as OrbUi does
+
+def wave_svg(eid, cls=""):
+    ls = "".join(f'<line class="wb" x1="{BAR_X[i]:.2f}" x2="{BAR_X[i]:.2f}" '
+                 f'y1="{50-BARS[i]*50:.2f}" y2="{50+BARS[i]*50:.2f}"/>' for i in range(5))
+    return (f'<svg id="{eid}" class="{cls}" viewBox="0 0 100 100" fill="none">'
+            f'<g stroke="currentColor" stroke-width="{GAP:.4f}" stroke-linecap="round">{ls}</g></svg>')
+
+# ── the hero ring: a 150° arc of capsules, tilted into depth so the middle one
+#    leans toward camera. The app's geometry, given a third dimension.
+RCHIPS = []
+for i in range(5):
+    a = math.radians(fan_angle(i))
+    RCHIPS.append((RING_R * math.cos(a), RING_R * math.sin(a), -150.0 * math.cos(a)))
+
+# ── the little phones for the dolly ─────────────────────────────────────────
+TRIO = [("wa", whatsapp, 380.0), ("gm", gmail, 1080.0), ("sl", slack, 1780.0)]
+def trio_html():
+    out = []
+    for key, fn, x in TRIO:
+        # the trio phones are scenery — strip the ids so they cannot collide with
+        # the main device's fields, which are the ones paint() actually drives
+        markup = fn(1.0)
+        for k in ("wa", "gm", "sl"):
+            markup = markup.replace(f'id="{k}-txt"', f'data-field="{k}"')
+        chips = "".join(
+            f'<div class="uchip" style="left:{ORB_SX + 116*math.cos(math.radians(fan_angle(i))) - 64:.1f}px;'
+            f'top:{ORB_SY + 116*math.sin(math.radians(fan_angle(i))) - 17:.1f}px">{TONES[key][i]}</div>'
+            for i in range(5))
+        out.append(
+            f'<div class="dev tdev" id="tdev-{key}" style="left:{x-DEV_W/2:.1f}px;top:{540-DEV_H/2:.1f}px">'
+            f'<div class="scr">{markup}{keyboard(1.0)}'
+            f'<div class="tscrim"></div><div class="uchips">{chips}</div>'
+            f'<div class="uorb"><div class="uorb-b">{wave_svg("tw-"+key,"uwave")}</div></div>'
+            f'</div></div>')
+    return "".join(out)
+
+# ── paint script tables ─────────────────────────────────────────────────────
+PHASES = [
+    (0.00, 6.55, "idle"),
+    (6.55, 8.60, "recording"), (8.60, 9.60, "working"), (9.60, 10.05, "done"),
+    (10.05, 12.95, "idle"),
+    (12.95, 14.05, "recording"), (14.05, 14.85, "working"), (14.85, 15.30, "done"),
+    (15.30, 23.55, "idle"),
+    (23.70, 24.80, "recording"), (24.80, 25.40, "working"), (25.40, 25.90, "done"),
+    (26.00, 30.00, "idle"),
+]
+TRANSLATE_ON, TRANSLATE_OFF = 23.10, 25.42
+FIELDTEXT = [
+    (0.00, "wa-txt", ""),
+    (9.60, "wa-txt", "I'll be there at about half seven."),
+    (14.85, "wa-txt", "Yeah, half seven works — see you there."),
+    (25.42, "wa-txt", "Ngiyabonga, ngizokubona kusasa."),
+]
+SAY = [   # the full-bleed statements cut between the shots
+    (4.30, 5.35, "It's smaller than your thumb.", ""),
+    (5.35, 6.00, "It's smaller than your thumb.", "And it only exists while you're typing."),
+    (9.70, 10.30, "It lands where your cursor was.", ""),
+    (13.30, 15.40, "Slide. Release. Speak.", ""),
+    (15.70, 19.55, "The tones change with the app you're in.", ""),
+    (21.10, 22.55, "Put it wherever you want it.", ""),
+    (25.55, 26.15, "Say it in English.\\nSend it in isiZulu.", ""),
+]
+GEST = [(7.00, 9.55, "TAP"), (11.35, 13.00, "HOLD"), (20.15, 21.05, "DRAG"),
+        (23.15, 24.95, "DOUBLE TAP")]
+
+def js(rows):
+    return "[" + ",".join("[" + ",".join(f'"{c}"' if isinstance(c, str) else f"{c}"
+                          for c in r) + "]" for r in rows) + "]"
+
+HTML = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>RMBLR</title><style>
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-400-normal.woff2)format('woff2');font-weight:400;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-500-normal.woff2)format('woff2');font-weight:500;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-700-normal.woff2)format('woff2');font-weight:700;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-900-normal.woff2)format('woff2');font-weight:900;font-display:block}}
+@font-face{{font-family:NotoJP;src:url(assets/fonts/noto-sans-jp-japanese-500-normal.woff2)format('woff2');font-weight:500;font-display:block}}
+:root{{--dp:1px;
+  --bg:#05060A;--surface:#15171B;--text:#EDEFF3;--text-muted:#9AA1AD;
+  --accent:#7C6CFF;--alert:#E05561;--good:#4FBF87;--on-accent:#FFF;
+  --devr:46px;--devp:{PAD}px;
+  --sph1:#2A2E38;--sph2:#171A21;--sph3:#0B0D12}}
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#000}}
+#root{{position:relative;width:{W}px;height:{H}px;overflow:hidden;background:var(--bg);
+  font-family:Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}}
+.lay{{position:absolute;inset:0}}
+#film::after{{content:"";position:absolute;inset:0;pointer-events:none;z-index:9;
+  background:radial-gradient(ellipse 80% 64% at 44% 46%,transparent 0%,rgba(0,0,0,.26) 72%,rgba(0,0,0,.60) 100%)}}
+{STAGE_CSS}
+{APPS_CSS}
+
+/* the orb as it really is, on the phone: 52dp, flat, accurate */
+.uorb{{position:absolute;left:{ORB_SX-ORB/2:.1f}px;top:{ORB_SY-ORB/2:.1f}px;width:{ORB}px;height:{ORB}px;
+  display:grid;place-items:center;z-index:5}}
+.uorb-b{{width:{ORB*0.84:.2f}px;height:{ORB*0.84:.2f}px;border-radius:50%;background:var(--surface);
+  display:grid;place-items:center;box-shadow:0 3px 12px rgba(0,0,0,.5),0 0 22px rgba(124,108,255,.25)}}
+.uwave{{width:{ORB*0.46:.2f}px;height:{ORB*0.46:.2f}px;color:var(--text);display:block}}
+#uhalo{{position:absolute;inset:0;border-radius:50%;background:rgba(224,85,97,.22);opacity:0}}
+.uchip{{position:absolute;width:128px;height:34px;border-radius:17px;background:rgba(21,23,27,.94);
+  color:#9AA1AD;font-size:12px;display:flex;align-items:center;justify-content:center;
+  white-space:nowrap;border:1px solid #2B2F37;z-index:4;opacity:0}}
+.uchip.on{{background:var(--accent);color:#fff;font-weight:600;border-color:var(--accent)}}
+.tscrim{{position:absolute;inset:0;background:#07080A;opacity:0;z-index:3}}
+#thumb{{position:absolute;width:88px;height:88px;border-radius:50%;margin-left:-44px;margin-top:-44px;
+  background:radial-gradient(circle at 42% 38%,rgba(255,255,255,.20),rgba(255,255,255,.05) 70%);
+  border:2px solid rgba(255,255,255,.42);opacity:0;z-index:6;left:0;top:0}}
+#trail{{position:absolute;width:52px;height:52px;border-radius:50%;margin-left:-26px;margin-top:-26px;
+  background:radial-gradient(circle,rgba(124,108,255,.55),rgba(124,108,255,0) 70%);opacity:0;z-index:4;
+  left:0;top:0}}
+#trio{{position:absolute;inset:0;opacity:0}}
+.uchips{{position:absolute;inset:0;z-index:4}}
+.tdev{{width:{DEV_W}px;height:{DEV_H}px;opacity:.16}}
+#devMain{{width:{DEV_W}px;height:{DEV_H}px;left:{DEV_L}px;top:{DEV_T}px}}
+
+#heroOrb{{left:{HX-HERO/2:.1f}px;top:{HY-HERO/2:.1f}px;width:{HERO}px;height:{HERO}px;
+  font-size:{HERO}px;opacity:0}}
+#heroHalo{{position:absolute;left:{HX-HERO*0.62:.1f}px;top:{HY-HERO*0.62:.1f}px;
+  width:{HERO*1.24:.1f}px;height:{HERO*1.24:.1f}px;border-radius:50%;
+  background:radial-gradient(circle,rgba(224,85,97,.30) 40%,rgba(224,85,97,.10) 66%,transparent 76%);opacity:0}}
+#vbloom{{left:{HX-720:.0f}px;top:{HY-720:.0f}px;width:1440px;height:1440px;
+  background:radial-gradient(circle,rgba(124,108,255,.20) 0%,rgba(124,108,255,.055) 34%,transparent 64%)}}
+#beams{{left:{HX-HERO*0.46/2:.1f}px;top:{HY-HERO*0.46/2:.1f}px;
+  width:{HERO*0.46:.1f}px;height:{HERO*0.46:.1f}px;gap:{HERO*0.46/(5*2.2):.2f}px}}
+.beam{{width:{HERO*0.46/(5*2.2):.2f}px}}
+#heroGlyph{{position:absolute;left:0;right:0;top:0;bottom:0;display:grid;place-items:center;
+  font-family:NotoJP,Roboto,sans-serif;font-size:{HERO*0.34:.0f}px;font-weight:500;color:#fff;opacity:0;
+  text-shadow:0 0 40px rgba(255,255,255,.5)}}
+#heroRing{{position:absolute;left:{HX-HERO*0.30:.1f}px;top:{HY-HERO*0.30:.1f}px;
+  width:{HERO*0.60:.1f}px;height:{HERO*0.60:.1f}px;opacity:0}}
+#ring{{left:{HX}px;top:{HY}px;width:0;height:0}}
+.rchip{{width:250px;height:66px;margin-left:-125px;margin-top:-33px;font-size:23px}}
+#gest{{left:1000px;top:452px}}
+
+#lock{{position:absolute;inset:0;opacity:0}}
+#lockmark{{position:absolute;left:{HX-HERO*0.46/2:.1f}px;top:{HY-HERO*0.46/2:.1f}px;
+  width:{HERO*0.46:.1f}px;height:{HERO*0.46:.1f}px;color:#fff;
+  filter:drop-shadow(0 0 26px rgba(124,108,255,.55))}}
+#lockword{{position:absolute;left:{HX+310:.0f}px;top:{HY-60:.0f}px;color:#fff;font-size:118px;
+  font-weight:900;letter-spacing:-.035em;line-height:1}}
+.fact{{position:absolute;width:1600px;text-align:center;left:160px;color:#9AA1AD;font-size:32px;opacity:0}}
+#url{{position:absolute;width:1600px;text-align:center;left:160px;top:840px;color:#8E80FF;
+  font-size:30px;font-weight:500;opacity:0}}
+</style></head><body>
+<div id="root" data-composition-id="rmblr" data-width="{W}" data-height="{H}"
+     data-fps="{FPS}" data-duration="{DUR}">
+  <div class="clip lay" id="film" data-start="0" data-duration="{DUR}" data-track-index="0">
+
+    <div id="void">
+      <div class="bloom" id="vbloom"></div>
+      <div id="heroHalo"></div>
+      <div class="sphere" id="heroOrb">
+        <div id="heroGlyph">文A</div>
+      </div>
+      <div id="beams">{''.join(f'<div class="beam" data-i="{i}"></div>' for i in range(5))}</div>
+      <svg id="heroRing" viewBox="0 0 100 100" fill="none"><circle id="ringarc" cx="50" cy="50" r="42"
+        stroke="#fff" stroke-width="7" stroke-linecap="round"/></svg>
+      <div id="ring">{''.join(f'<div class="rchip" id="rc{i}"></div>' for i in range(5))}</div>
+    </div>
+
+    <div id="world">
+      <div class="dev" id="devMain"><div class="scr">
+        {whatsapp(1.0)}{keyboard(1.0)}
+        <div id="trail"></div>
+        <div class="uorb" id="uorb"><div id="uhalo"></div>
+          <div class="uorb-b" id="uorbb">{wave_svg("uwave","uwave")}</div></div>
+        <div id="thumb"></div>
+      </div></div>
+      <div id="trio">{trio_html()}</div>
+    </div>
+
+    <div id="say"><div id="sayline" data-layout-allow-overlap data-layout-allow-occlusion></div><div id="saysub" data-layout-allow-overlap data-layout-allow-occlusion></div></div>
+    <div id="gest"></div>
+
+    <div id="lock">
+      {wave_svg("lockmark")}
+      <div id="lockword">RMBLR</div>
+      <div class="fact" id="fact1" style="top:716px">Your own API key. No account. No subscription.</div>
+      <div class="fact" id="fact2" style="top:772px">A dictionary of your own words. Open source, MIT.</div>
+      <div id="url">github.com/Past-da-king/rmblr</div>
+    </div>
+
+  </div>
+</div>
+<script src="vendor/gsap.min.js"></script>
+<script>
+(function(){{
+const $=s=>document.querySelector(s), $$=s=>document.getElementById(s);
+const PHASES={js(PHASES)},FIELDTEXT={js(FIELDTEXT)},SAY={js(SAY)},GEST={js(GEST)};
+const TONES={{wa:{TONES['wa']},gm:{TONES['gm']},sl:{TONES['sl']}}};
+const BARS={BARS}, HERO={HERO};
+const SPH={{idle:["#2A2E38","#171A21","#0B0D12"],recording:["#FF7D86","#D8404E","#7E1F28"],
+  working:["#A79AFF","#6E5CF5","#33268F"],done:["#7FE0AE","#3FAE79","#15563A"]}};
+const heroOrb=$$("heroOrb"),heroHalo=$$("heroHalo"),heroGlyph=$$("heroGlyph"),
+      heroRing=$$("heroRing"),ringarc=$$("ringarc"),
+      uorbb=$$("uorbb"),uhalo=$$("uhalo"),
+      sayline=$$("sayline"),saysub=$$("saysub"),gest=$$("gest"),
+      beams=[].slice.call(document.querySelectorAll("#beams .beam")),
+      uwaves=[].slice.call(document.querySelectorAll(".uwave .wb"));
+const pick=(r,t)=>{{let v=null;for(const x of r) if(t>=x[0]&&t<x[1]) v=x; return v;}};
+const last=(r,t)=>{{let v=null;for(const x of r) if(t>=x[0]) v=x; return v;}};
+const UCOL={{idle:"#15171B",recording:"#E05561",working:"#7C6CFF",done:"#4FBF87"}};
+const level=t=>Math.max(0,Math.min(1,0.52+0.46*(
+  0.60*Math.sin(2*Math.PI*3.10*t)+0.30*Math.sin(2*Math.PI*7.30*t+1.1)
+ +0.25*Math.sin(2*Math.PI*1.70*t+2.3))));
+
+function paint(t){{
+  const ph=(pick(PHASES,t)||[0,0,"idle"])[2];
+  const rec=ph==="recording", lv=rec?level(t):0;
+
+  /* the sphere is lit from its own phase — the key colour drives all three stops */
+  const s=SPH[ph]||SPH.idle;
+  heroOrb.style.setProperty("--sph1",s[0]);
+  heroOrb.style.setProperty("--sph2",s[1]);
+  heroOrb.style.setProperty("--sph3",s[2]);
+  uorbb.style.background=UCOL[ph]||UCOL.idle;
+
+  heroHalo.style.opacity=rec?1:0;
+  heroHalo.style.transform="scale("+(0.92+lv*0.30).toFixed(4)+")";
+  uhalo.style.opacity=rec?1:0;
+  uhalo.style.transform="scale("+(1+lv*0.35).toFixed(4)+")";
+
+  /* the voice, twice: columns of light at hero scale, the real 5-bar mark at 52dp */
+  for(let i=0;i<5;i++){{
+    const h=Math.min(BARS[i]*(1+lv*(i===2?0.15:0.30)),1.0);
+    beams[i].style.height=(h*HERO*0.46).toFixed(1)+"px";
+    uwaves.forEach((w,k)=>{{ if(k%5===i){{
+      w.setAttribute("y1",(50-h*50).toFixed(2)); w.setAttribute("y2",(50+h*50).toFixed(2)); }} }});
+  }}
+  const tr=(t>={TRANSLATE_ON}&&t<{TRANSLATE_OFF});
+  const glyph=(tr && ph==="idle");
+  heroGlyph.style.opacity=glyph?1:0;
+  document.querySelectorAll(".uwave").forEach(w=>w.style.opacity=glyph?0:1);
+
+  if(ph==="working"){{
+    heroRing.style.opacity=1;
+    const ang=(t*1000/900*360)%360,p=(t*1000%2200)/1100,tri=p<1?p:2-p;
+    const sw=40+220*(tri<0.5?2*tri*tri:1-Math.pow(-2*tri+2,2)/2),C=2*Math.PI*42;
+    ringarc.setAttribute("stroke-dasharray",(C*sw/360).toFixed(2)+" "+(C*2).toFixed(2));
+    ringarc.setAttribute("transform","rotate("+(ang-90).toFixed(2)+" 50 50)");
+  }} else heroRing.style.opacity=0;
+
+  ["wa-txt","gm-txt","sl-txt"].forEach(id=>{{
+    const e=last(FIELDTEXT.filter(r=>r[1]===id),t), el=$$(id); if(el) el.textContent=e?e[2]:"";
+  }});
+  const showCaret=(t>1.0&&t<26.0&&!(t>=15.4&&t<19.6));
+  document.querySelectorAll("#devMain .caret").forEach(c=>
+    c.style.opacity=(showCaret&&Math.floor(t*2)%2===0)?1:0);
+
+  const sy=pick(SAY,t); sayline.textContent=sy?sy[2]:""; saysub.textContent=sy?sy[3]:"";
+  const g=pick(GEST,t); gest.textContent=g?g[2]:"";
+
+  const set=t<15.4?TONES.wa:(t<19.6?TONES.gm:TONES.sl);
+  for(let i=0;i<5;i++) $$("rc"+i).textContent=set[i];
+}}
+
+const tl=gsap.timeline({{paused:true}}), E="power3.out", IR={{immediateRender:false}};
+tl.to({{p:0}},{{p:1,duration:{DUR},ease:"none",onUpdate:function(){{paint(this.targets()[0].p*{DUR});}}}},0);
+
+gsap.set("#world",{{transformOrigin:"0px 0px"}});
+gsap.set("#void",{{transformOrigin:"0px 0px"}});
+gsap.set("#trio",{{transformOrigin:"0px 0px"}});
+gsap.set("#devMain",{{transformOrigin:"50% 50%"}});
+gsap.set(".tdev",{{transformOrigin:"50% 50%"}});
+gsap.set("#ring",{{transformStyle:"preserve-3d"}});
+
+const OWX={OWX}, OWY={OWY}, HX={HX}, HY={HY}, HS={HERO_SCALE:.4f};
+/* Put the UI orb at frame (fx,fy) at scale s. At s=HS the 52dp orb is exactly the
+   size of the hero sphere — which is what makes the two worlds match-cut. */
+function world(at,dur,s,fx,fy,ez){{
+  tl.to("#world",{{scale:s,x:fx-OWX*s,y:fy-OWY*s,duration:dur,ease:ez||"power2.inOut"}},at);
+}}
+const REST=[1,OWX-140,OWY];   /* phone left of centre, type column clear */
+
+/* ═ 0.0–3.0 · VOID — five bars of light fold into the orb ═ */
+gsap.set("#void",{{opacity:1}});
+gsap.set("#beams",{{opacity:1}});
+for(let i=0;i<5;i++)
+  tl.fromTo("#beams .beam:nth-child("+(i+1)+")",{{scaleY:0,opacity:0}},
+    {{scaleY:1,opacity:1,duration:0.55,ease:"power3.out",...IR}},0.15+i*0.10);
+/* the one place immediateRender TRUE is correct: the bars must already be wide
+   apart at frame 0, before the tween that folds them together runs */
+tl.fromTo("#beams",{{scale:2.4}},{{scale:1,duration:0.85,ease:"power2.inOut",
+  immediateRender:true}},1.55);
+tl.fromTo("#heroOrb",{{opacity:0,scale:0.55}},{{opacity:1,scale:1,duration:0.75,ease:E,...IR}},1.95);
+tl.fromTo("#vbloom",{{opacity:0,scale:0.7}},{{opacity:1,scale:1,duration:1.0,ease:E,...IR}},1.95);
+tl.to("#beams",{{opacity:0,duration:0.30}},2.35);
+/* the voice, as light — only in the void, only while it is actually listening */
+tl.to("#beams",{{opacity:1,duration:0.22}},6.90);
+tl.to("#beams",{{opacity:0,duration:0.22}},8.62);
+tl.to("#beams",{{opacity:1,duration:0.22}},12.98);
+tl.to("#beams",{{opacity:0,duration:0.22}},14.08);
+tl.to("#beams",{{opacity:1,duration:0.22}},23.74);
+tl.to("#beams",{{opacity:0,duration:0.22}},24.82);
+
+/* ═ 3.0–6.0 · REVEAL — one continuous pull-back to real size ═ */
+tl.set("#world",{{opacity:1}},2.95);
+world(2.95,0.01,HS,HX,HY);
+tl.to("#void",{{opacity:0,duration:0.45,ease:"power2.inOut"}},3.00);
+world(3.05,2.30,REST[0],REST[1],REST[2],"power3.out");
+tl.fromTo("#devMain",{{rotationY:-3,rotationX:0.6,scale:1}},
+  {{rotationY:-15,rotationX:3,duration:2.30,ease:"power3.out",...IR}},3.05);
+tl.fromTo("#sayline",{{opacity:0,y:26}},{{opacity:1,y:0,duration:0.55,ease:E,...IR}},4.30);
+tl.fromTo("#saysub",{{opacity:0,y:16}},{{opacity:1,y:0,duration:0.45,ease:E,...IR}},5.35);
+
+/* ═ 6.0–10.3 · TAP — dive for the listen, surface for the landing ═ */
+tl.fromTo("#thumb",{{opacity:0,x:{ORB_SX},y:1150}},
+  {{opacity:1,x:{ORB_SX},y:{ORB_SY},duration:0.50,ease:E,...IR}},6.00);
+tl.to(["#sayline","#saysub"],{{opacity:0,duration:0.25}},6.05);
+tl.fromTo("#thumb",{{scale:1}},{{scale:0.82,duration:0.09,yoyo:true,repeat:1,ease:"power2.out",...IR}},6.45);
+tl.to("#thumb",{{opacity:0,duration:0.20}},6.58);
+/* the dive: reality races in and the void takes over at matched size */
+world(6.45,0.55,HS,HX,HY,"power2.in");
+tl.to("#world",{{opacity:0,duration:0.22,ease:"none"}},6.78);
+tl.to("#void",{{opacity:1,duration:0.22,ease:"none"}},6.78);
+tl.fromTo("#gest",{{opacity:0,x:52}},{{opacity:1,x:0,duration:0.45,ease:E,...IR}},7.00);
+tl.to("#gest",{{opacity:0,duration:0.30}},9.30);
+/* surface again for the result */
+tl.to("#void",{{opacity:0,duration:0.25,ease:"none"}},9.42);
+tl.to("#world",{{opacity:1,duration:0.25,ease:"none"}},9.42);
+world(9.40,0.01,HS,HX,HY);
+world(9.44,1.05,REST[0],REST[1],REST[2],"power3.out");
+tl.fromTo("#sayline",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.42,ease:E,...IR}},9.72);
+tl.to("#sayline",{{opacity:0,duration:0.25}},10.30);
+
+/* ═ 10.3–15.4 · HOLD — the tones orbit the orb in space ═ */
+tl.fromTo("#thumb",{{opacity:0,x:{ORB_SX},y:1150}},
+  {{opacity:1,x:{ORB_SX},y:{ORB_SY},duration:0.45,ease:E,...IR}},10.35);
+tl.to("#thumb",{{opacity:0,duration:0.18}},10.92);
+world(10.80,0.50,HS,HX,HY,"power2.in");
+tl.to("#world",{{opacity:0,duration:0.20,ease:"none"}},11.12);
+tl.to("#void",{{opacity:1,duration:0.20,ease:"none"}},11.12);
+tl.fromTo("#gest",{{opacity:0,x:52}},{{opacity:1,x:0,duration:0.40,ease:E,...IR}},11.35);
+tl.fromTo("#ring",{{opacity:0,rotationY:-38,scale:0.5}},
+  {{opacity:1,rotationY:-18,scale:1,duration:0.85,ease:"power3.out",...IR}},11.30);
+const RC={[[round(x,1),round(y,1),round(z,1)] for x,y,z in RCHIPS]};
+for(let i=0;i<5;i++){{
+  tl.fromTo("#rc"+i,{{x:0,y:0,z:0,opacity:0,scale:0.4}},
+    {{x:RC[i][0],y:RC[i][1],z:RC[i][2],opacity:1,scale:1,duration:0.62,
+      ease:"back.out(1.25)",...IR}},11.34+i*0.05);
+  tl.set("#rc"+i,{{rotationY:18}},11.34);
+}}
+/* the camera drifts around the ring — the only orbit in the film, and it is the
+   one shot where you need to feel that the tones sit in space */
+tl.to("#ring",{{rotationY:-4,duration:1.7,ease:"sine.inOut"}},12.20);
+[[12.10,4],[12.55,2],[12.95,0]].forEach(s=>tl.call(()=>{{
+  for(let i=0;i<5;i++) $$("rc"+i).classList.toggle("on",i===s[1]);}},null,s[0]));
+tl.call(()=>{{for(let i=0;i<5;i++) $$("rc"+i).classList.remove("on");}},null,13.85);
+for(let i=0;i<5;i++)
+  tl.to("#rc"+i,{{x:0,y:0,z:0,opacity:0,scale:0.4,duration:0.34,ease:"power2.in"}},13.72+i*0.03);
+tl.to("#gest",{{opacity:0,duration:0.25}},13.60);
+tl.fromTo("#sayline",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.42,ease:E,...IR}},13.32);
+tl.to("#sayline",{{opacity:0,duration:0.28}},15.36);
+tl.to("#void",{{opacity:0,duration:0.25,ease:"none"}},14.28);
+tl.to("#world",{{opacity:1,duration:0.25,ease:"none"}},14.28);
+world(14.26,0.01,HS,HX,HY);
+world(14.30,1.00,REST[0],REST[1],REST[2],"power3.out");
+
+/* ═ 15.4–19.6 · THE APPS — three devices, one dolly ═ */
+tl.to("#devMain",{{opacity:0,duration:0.28,ease:"none"}},15.40);
+tl.set("#world",{{opacity:1,scale:1,x:0,y:0}},15.40);
+tl.fromTo("#trio",{{opacity:0,x:293,scale:0.86}},
+  {{opacity:1,x:293,scale:0.86,duration:0.30,ease:"none",...IR}},15.44);
+gsap.set(".tdev",{{rotationY:-14}});
+tl.to("#trio",{{x:-309,duration:1.35,ease:"power2.inOut"}},16.35);
+tl.to("#trio",{{x:-911,duration:1.35,ease:"power2.inOut"}},17.90);
+for(let i=0;i<5;i++){{
+  ["wa","gm","sl"].forEach((k,d)=>{{
+    const at=15.85+d*1.55;
+    tl.fromTo("#tdev-"+k+" .uchips > div:nth-child("+(i+1)+")",{{opacity:0,scale:0.6}},
+      {{opacity:1,scale:1,duration:0.34,ease:"back.out(1.3)",...IR}},at+i*0.04);
+    tl.to("#tdev-"+k+" .uchips > div:nth-child("+(i+1)+")",{{opacity:0,duration:0.25}},at+1.05);
+  }});
+}}
+["wa","gm","sl"].forEach((k,d)=>{{
+  const at=15.85+d*1.55;
+  tl.fromTo("#tdev-"+k+" .tscrim",{{opacity:0}},{{opacity:0.42,duration:0.26,...IR}},at);
+  tl.to("#tdev-"+k+" .tscrim",{{opacity:0,duration:0.26}},at+1.05);
+  /* focus: the one the camera is on comes up, the others sit back */
+  tl.fromTo("#tdev-"+k,{{opacity:0.16}},{{opacity:1,duration:0.42,ease:"power2.out",...IR}},at-0.50);
+  tl.fromTo("#tdev-"+k,{{opacity:1}},{{opacity:0.16,duration:0.42,ease:"power2.in",...IR}},at+1.10);
+}});
+tl.fromTo("#sayline",{{opacity:0,y:24}},{{opacity:1,y:0,duration:0.5,ease:E,...IR}},15.70);
+tl.to("#sayline",{{opacity:0,duration:0.30}},19.30);
+
+/* ═ 19.6–22.6 · DRAG — thrown across the screen ═ */
+tl.to("#trio",{{opacity:0,duration:0.30,ease:"none"}},19.58);
+tl.set("#devMain",{{opacity:1}},19.60);
+tl.set("#world",{{opacity:1}},19.60);
+world(19.58,0.01,REST[0],REST[1],REST[2]);
+tl.fromTo("#thumb",{{opacity:0,x:{ORB_SX},y:1150}},
+  {{opacity:1,x:{ORB_SX},y:{ORB_SY},duration:0.42,ease:E,...IR}},19.70);
+tl.fromTo("#gest",{{opacity:0,x:52}},{{opacity:1,x:0,duration:0.36,ease:E,...IR}},20.15);
+tl.fromTo("#trail",{{opacity:0,x:{ORB_SX},y:{ORB_SY}}},{{opacity:.9,duration:0.16,...IR}},20.28);
+tl.to("#uorb",{{x:{PARK_SX-ORB_SX},y:{PARK_SY-ORB_SY},duration:0.72,ease:"power2.inOut"}},20.34);
+tl.to("#thumb",{{x:{PARK_SX},y:{PARK_SY},duration:0.72,ease:"power2.inOut"}},20.34);
+tl.to("#trail",{{x:{PARK_SX},y:{PARK_SY},duration:0.72,ease:"power2.inOut"}},20.34);
+tl.to("#trail",{{opacity:0,duration:0.40}},21.06);
+tl.to("#thumb",{{opacity:0,duration:0.24}},21.12);
+tl.to("#gest",{{opacity:0,duration:0.25}},21.02);
+tl.fromTo("#sayline",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.42,ease:E,...IR}},21.12);
+tl.to("#sayline",{{opacity:0,duration:0.25}},22.54);
+tl.fromTo("#devMain",{{rotationY:-15}},{{rotationY:-9,duration:2.6,ease:"sine.inOut",...IR}},19.70);
+
+/* ═ 22.6–26.2 · TRANSLATE ═ */
+tl.fromTo("#thumb",{{opacity:0,x:{PARK_SX},y:1150}},
+  {{opacity:1,x:{PARK_SX},y:{PARK_SY},duration:0.38,ease:E,...IR}},22.62);
+tl.fromTo("#thumb",{{scale:1}},{{scale:0.82,duration:0.07,yoyo:true,repeat:1,ease:"power2.out",...IR}},23.00);
+tl.to("#thumb",{{scale:0.82,duration:0.07,yoyo:true,repeat:1,ease:"power2.out"}},23.18);
+tl.to("#thumb",{{opacity:0,duration:0.22}},23.34);
+tl.fromTo("#gest",{{opacity:0,x:52}},{{opacity:1,x:0,duration:0.36,ease:E,...IR}},23.15);
+tl.to("#gest",{{opacity:0,duration:0.28}},24.70);
+world(23.30,0.45,HS,HX,HY,"power2.in");
+tl.to("#world",{{opacity:0,duration:0.20,ease:"none"}},23.56);
+tl.to("#void",{{opacity:1,duration:0.20,ease:"none"}},23.56);
+tl.to("#void",{{opacity:0,duration:0.24,ease:"none"}},25.42);
+tl.to("#world",{{opacity:1,duration:0.24,ease:"none"}},25.42);
+world(25.40,0.01,HS,HX,HY);
+world(25.44,0.95,REST[0],REST[1],REST[2],"power3.out");
+tl.fromTo("#sayline",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.42,ease:E,...IR}},25.56);
+tl.to("#sayline",{{opacity:0,duration:0.25}},26.14);
+
+/* ═ 26.2–30.0 · LOCKUP — the phone goes, the orb stays, and opens ═ */
+tl.to("#world",{{opacity:0,duration:0.65,ease:"power2.inOut"}},26.20);
+tl.set("#void",{{opacity:1}},26.20);
+tl.fromTo("#heroOrb",{{opacity:0,scale:0.86}},{{opacity:1,scale:1,duration:0.55,ease:E,...IR}},26.24);
+tl.set("#lock",{{opacity:1}},26.90);
+tl.to("#heroOrb",{{opacity:0,scale:1.18,duration:0.55,ease:"power2.inOut"}},26.95);
+tl.fromTo("#lockmark",{{opacity:0,scale:0.55}},{{opacity:1,scale:1,duration:0.65,ease:E,...IR}},27.00);
+tl.to("#lockmark",{{x:200,duration:0.55,ease:"power2.inOut"}},27.55);
+tl.fromTo("#lockword",{{opacity:0,x:-40}},{{opacity:1,x:0,duration:0.55,ease:E,...IR}},27.70);
+tl.fromTo("#fact1",{{opacity:0,y:14}},{{opacity:1,y:0,duration:0.42,ease:E,...IR}},28.25);
+tl.fromTo("#fact2",{{opacity:0,y:14}},{{opacity:1,y:0,duration:0.42,ease:E,...IR}},28.65);
+tl.fromTo("#url",{{opacity:0,y:12}},{{opacity:1,y:0,duration:0.42,ease:E,...IR}},29.10);
+tl.to("#vbloom",{{opacity:0.55,duration:1.2,ease:"sine.inOut"}},27.0);
+
+paint(0);
+window.__timelines=window.__timelines||{{}};
+window.__timelines["rmblr"]=tl;
+}})();
+</script></body></html>
+"""
+open(OUT, "w", encoding="utf-8").write(HTML)
+print(f"wrote index.html ({len(HTML)} bytes)")
+print(f"  hero {HERO}px at ({HX},{HY})  match-cut scale {HERO_SCALE:.3f}")
+print(f"  device {DEV_W}x{DEV_H} at ({DEV_L},{DEV_T})  UI orb world ({OWX},{OWY})")

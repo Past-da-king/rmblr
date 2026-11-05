@@ -1,0 +1,420 @@
+#!/usr/bin/env python3
+"""RMBLR — "One thumb, five verbs." 30.0s · 1920x1080 · 60fps.  (v2)
+
+WHAT CHANGED FROM v1, and why — Ayanda's notes, verbatim where they matter:
+
+1. "I want Gmail to look like Gmail. I want WhatsApp to look like WhatsApp. I
+   want Slack to look like Slack."  v1 used neutral stand-in surfaces to dodge
+   trademarks. Overruled: the three apps are now real recreations (apps.py) with
+   their own chrome, colour and furniture. The whole point of RMBLR is that it
+   works INSIDE other people's apps, and that lands or it doesn't.
+
+2. "That text only comes once you press that button and then it shows up
+   instantly... there's a loading."  v1 streamed the transcript into the field
+   word by word while recording, which is simply not what the app does. RMBLR
+   writes into ANOTHER app's field through accessibility, so nothing appears
+   until the whole string is inserted at the cursor, in one go, after the model
+   comes back. The correct beat is: press → RECORD (field untouched) → WORK (the
+   loading, field still untouched) → the text LANDS WHOLE. The pause before the
+   snap is the truth and it is also the better beat.
+
+3. "You can move it around."  Drag was in the README's gesture table and missing
+   from the film. It is now the turn: the orb sits in one place for eighteen
+   seconds and then, for the first time, your thumb moves it.
+
+4. "Let me see it floating."  The orb is parked over the thread, above the
+   composer, plainly floating on top of someone else's app.
+
+The camera pushes in for the gestures now instead of staying locked — v1's total
+stillness cost the arc its legibility, and legibility is the whole job.
+
+  F1  0.0- 3.5  WhatsApp · it appears because a field took the cursor
+  F2  3.5- 8.0  TAP        · record, load, and the text LANDS whole
+  F3  8.0-13.5  HOLD       · the arc of tones fans out
+  F4 13.5-18.0  Gmail      · FLICK skips the menu, and the tones have changed
+  F5 18.0-23.0  Slack      · DRAG it somewhere else, then a third set of tones
+  F6 23.0-26.5  WhatsApp   · DOUBLE TAP — said in English, sent in isiZulu
+  F7 26.5-30.0  the lockup
+
+120 BPM grid (beat 0.5s, bar 2s). 30.000s exactly, so the approved score drops
+straight back on with no re-edit.
+"""
+import math, os
+from apps import whatsapp, gmail, slack, keyboard, APPS_CSS
+
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
+W, H, FPS, DUR = 1920, 1080, 60, 30.0
+DP = 1.42          # 760 of the phone's 851dp fills the frame; the keyboard runs off the bottom
+def dp(v): return v * DP
+
+SCR_X, SCR_W = 210.0, dp(393)          # 558.1 — a real 393dp viewport
+ORB   = dp(52)                          # 88.4
+ORB_B = dp(52 * 0.84)
+ORB_G = dp(52 * 0.46)
+FAN_R = dp(116)                         # 197.2
+CH_W, CH_H, CH_R, CH_FS = dp(128), dp(34), dp(17), dp(12)
+
+HOME   = (668.0, 430.0)                 # parked over the thread, above the composer
+PARKED = (490.0, 285.0)                 # where your thumb puts it in F5
+LOCK   = (690.0, 505.0)                 # where the mark settles for the lockup
+CLAIM_X = 860.0
+
+def fan_angle(i, n=5, open_right=False):
+    """OrbUi.fanAngleDegrees() — 0 points right, grows clockwise, opens away
+    from the parked edge. The orb lives near the right edge, so ours opens left."""
+    off = -75.0 + (150.0 / (n - 1)) * i
+    return off if open_right else 180.0 - off
+
+def chips_for(cx, cy):
+    out = []
+    for i in range(5):
+        a = math.radians(fan_angle(i))
+        out.append((cx + FAN_R * math.cos(a) - CH_W / 2,
+                    cy + FAN_R * math.sin(a) - CH_H / 2))
+    return out
+
+CH_A, CH_B = chips_for(*HOME), chips_for(*PARKED)
+
+# A profile is "pick the apps, then pick the five tones the orb offers in them",
+# so all three sets are drawn from the same shipped tones — only the selection
+# and the order change. That IS the feature.
+TONES = {
+    "wa": ["Casual", "Clean up", "Grammar", "Bullets", "Summary"],
+    "gm": ["Professional", "Summary", "Clean up", "Grammar", "Bullets"],
+    "sl": ["Clean up", "Casual", "Bullets", "Professional", "Summary"],
+}
+
+BARS = [0.34, 0.66, 1.0, 0.72, 0.42]
+GAP = 100.0 / (5 * 2.2)
+BAR_X = [GAP * 0.6 + i * (GAP * 2) + GAP / 2 for i in range(5)]
+
+def wave_svg(eid):
+    ls = "".join(f'<line class="wb" x1="{BAR_X[i]:.2f}" x2="{BAR_X[i]:.2f}" '
+                 f'y1="{50-BARS[i]*50:.2f}" y2="{50+BARS[i]*50:.2f}"/>' for i in range(5))
+    return (f'<svg id="{eid}" viewBox="0 0 100 100" fill="none">'
+            f'<g stroke="currentColor" stroke-width="{GAP:.4f}" stroke-linecap="round">{ls}</g></svg>')
+
+# ── the paint script ────────────────────────────────────────────────────────
+PHASES = [
+    (0.00, 2.00, "gone"), (2.00, 4.50, "idle"),
+    (4.50, 6.30, "recording"), (6.30, 7.00, "working"), (7.00, 7.45, "done"),
+    (7.45, 11.40, "idle"),
+    (11.40, 12.40, "recording"), (12.40, 12.95, "working"), (12.95, 13.35, "done"),
+    (13.35, 15.00, "idle"),
+    (15.50, 16.45, "recording"), (16.45, 17.00, "working"), (17.00, 17.35, "done"),
+    (17.35, 24.20, "idle"),
+    (24.20, 25.30, "recording"), (25.30, 25.90, "working"), (25.90, 26.30, "done"),
+    (26.30, 30.00, "idle"),
+]
+TRANSLATE_ON, TRANSLATE_OFF = 23.70, 26.15
+
+# The text NEVER appears before the load finishes, and when it does it appears
+# whole. One event per landing.
+FIELDTEXT = [
+    (0.00,  "wa-txt", ""),
+    (7.00,  "wa-txt", "I'll be there at about half seven."),
+    (12.95, "wa-txt", "Yeah, half seven works — see you there."),
+    (13.50, "gm-txt", ""),
+    (17.00, "gm-txt", "Half seven works for me. See you there."),
+    (18.00, "sl-txt", ""),
+    (23.00, "wa-txt", ""),
+    (25.90, "wa-txt", "Ngiyabonga, ngizokubona kusasa."),
+]
+# which field owns the caret, and when
+CARET = [(1.20, 13.50, "wa"), (13.90, 18.00, "gm"), (18.40, 23.00, "sl"), (23.20, 26.40, "wa")]
+
+CLAIMS = [
+    (0.90,  2.30, "It shows up when you type.", ""),
+    (2.30,  3.50, "It shows up when you type.", "Nowhere else."),
+    (3.90,  5.10, "TAP", ""),
+    (5.10,  8.00, "TAP", "It lands where your cursor was."),
+    (8.40,  9.80, "HOLD", ""),
+    (9.80, 13.50, "HOLD", "Slide to a tone. Release. Speak."),
+    (14.60, 15.60, "FLICK", ""),
+    (15.60, 17.20, "FLICK", "Skip the menu entirely."),
+    (17.30, 18.00, "", "Gmail. The tones changed with it."),
+    (18.60, 19.80, "DRAG", ""),
+    (19.80, 21.20, "DRAG", "Park it anywhere. It stays."),
+    (21.60, 23.00, "", "Slack. Different tones again."),
+    (23.40, 24.40, "DOUBLE TAP", ""),
+    (24.40, 26.50, "DOUBLE TAP", "Say it in English. Send it in isiZulu."),
+]
+def js(rows):
+    return "[" + ",".join("[" + ",".join(f'"{c}"' if isinstance(c, str) else f"{c}"
+                          for c in r) + "]" for r in rows) + "]"
+
+chips_html = "".join(
+    f'<div class="chip" id="chA{i}" style="left:{CH_A[i][0]:.1f}px;top:{CH_A[i][1]:.1f}px">'
+    f'<span id="txA{i}"></span></div>' for i in range(5)) + "".join(
+    f'<div class="chip" id="chB{i}" style="left:{CH_B[i][0]:.1f}px;top:{CH_B[i][1]:.1f}px">'
+    f'<span id="txB{i}"></span></div>' for i in range(5))
+
+HTML = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>RMBLR</title><style>
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-400-normal.woff2)format('woff2');font-weight:400;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-500-normal.woff2)format('woff2');font-weight:500;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-700-normal.woff2)format('woff2');font-weight:700;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-900-normal.woff2)format('woff2');font-weight:900;font-display:block}}
+@font-face{{font-family:NotoJP;src:url(assets/fonts/noto-sans-jp-japanese-500-normal.woff2)format('woff2');font-weight:500;font-display:block}}
+:root{{--dp:{DP}px;
+  --bg:#0A0B0D;--surface:#15171B;--raised:#1E2127;--line:#2B2F37;
+  --text:#EDEFF3;--text-muted:#9AA1AD;--text-light:#666D7A;
+  --accent:#7C6CFF;--alert:#E05561;--good:#4FBF87;--on-accent:#FFF;--scrim:#07080A}}
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#000}}
+#root{{position:relative;width:{W}px;height:{H}px;overflow:hidden;background:var(--bg);
+  font-family:Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}}
+.lay{{position:absolute;inset:0}}
+#stage{{position:absolute;inset:0}}
+#bloom{{position:absolute;left:{HOME[0]-700:.0f}px;top:{HOME[1]-520:.0f}px;width:1400px;height:1400px;
+  background:radial-gradient(circle,rgba(124,108,255,.13) 0%,rgba(124,108,255,.05) 36%,transparent 66%)}}
+
+/* the phone screen — a real 393x851dp viewport, cropped by the frame */
+#screen{{position:absolute;left:{SCR_X:.1f}px;top:0;width:{SCR_W:.1f}px;height:{dp(851):.1f}px;
+  overflow:hidden;border-left:1px solid var(--line);border-right:1px solid var(--line)}}
+.app{{position:absolute;inset:0}}
+#gm,#sl{{opacity:0}}
+.fieldtext{{color:inherit;font-size:calc(15*var(--dp));line-height:1.35}}
+#wa-txt{{color:#E9EDEF}} #gm-txt{{color:#E8EAED}} #sl-txt{{color:#D1D2D3}}
+.caret{{display:inline-block;width:calc(1.6*var(--dp));height:calc(19*var(--dp));
+  background:#7C6CFF;margin-left:calc(1*var(--dp));vertical-align:middle;opacity:0}}
+{APPS_CSS}
+
+#scrim{{position:absolute;left:{SCR_X:.1f}px;top:0;width:{SCR_W:.1f}px;height:{H}px;
+  background:var(--scrim);opacity:0}}
+.chip{{position:absolute;width:{CH_W:.1f}px;height:{CH_H:.1f}px;border-radius:{CH_R:.1f}px;
+  background:var(--surface);color:var(--text-muted);font-size:{CH_FS:.1f}px;
+  display:flex;align-items:center;justify-content:center;white-space:nowrap;opacity:0;
+  border:1px solid var(--line)}}
+.chip.on{{background:var(--accent);color:var(--on-accent);font-weight:600;border-color:var(--accent)}}
+
+#orb{{position:absolute;left:{HOME[0]-ORB/2:.2f}px;top:{HOME[1]-ORB/2:.2f}px;
+  width:{ORB:.2f}px;height:{ORB:.2f}px;display:grid;place-items:center;opacity:0}}
+#halo{{position:absolute;left:0;top:0;width:{ORB:.2f}px;height:{ORB:.2f}px;border-radius:50%;
+  background:rgba(224,85,97,.22);opacity:0}}
+#body{{position:relative;width:{ORB_B:.2f}px;height:{ORB_B:.2f}px;border-radius:50%;
+  background:var(--surface);display:grid;place-items:center;
+  box-shadow:0 {dp(3):.1f}px {dp(12):.1f}px rgba(0,0,0,.45)}}
+#wave{{width:{ORB_G:.2f}px;height:{ORB_G:.2f}px;color:var(--text);display:block}}
+#tglyph{{position:absolute;font-family:NotoJP,Roboto,sans-serif;font-size:{ORB_G*0.72:.1f}px;
+  font-weight:500;color:var(--text);opacity:0;line-height:1}}
+#ring{{position:absolute;width:{ORB_G:.2f}px;height:{ORB_G:.2f}px;opacity:0}}
+#thumb{{position:absolute;left:0;top:0;width:{dp(62):.1f}px;height:{dp(62):.1f}px;border-radius:50%;
+  background:rgba(237,239,243,.10);border:2px solid rgba(237,239,243,.46);opacity:0;
+  margin-left:{-dp(31):.1f}px;margin-top:{-dp(31):.1f}px}}
+/* the trail the drag leaves, so the move reads as deliberate rather than a jump */
+#trail{{position:absolute;left:0;top:0;width:{ORB:.2f}px;height:{ORB:.2f}px;border-radius:50%;
+  border:1px dashed rgba(124,108,255,.5);margin-left:{-ORB/2:.1f}px;margin-top:{-ORB/2:.1f}px;
+  opacity:0}}
+
+#claim{{position:absolute;left:{CLAIM_X:.0f}px;top:330px;width:970px}}
+#big{{color:var(--text);font-size:78px;font-weight:700;letter-spacing:-.022em;line-height:1.08;
+  min-height:88px}}
+#big.gest{{font-size:96px;font-weight:900;letter-spacing:.015em}}
+#small{{color:var(--text-muted);font-size:32px;line-height:1.45;margin-top:24px;width:840px}}
+
+#lockmark{{position:absolute;left:{LOCK[0]-ORB_G/2:.2f}px;top:{LOCK[1]-ORB_G/2:.2f}px;
+  width:{ORB_G:.2f}px;height:{ORB_G:.2f}px;color:var(--text);opacity:0}}
+#lockword{{position:absolute;left:{LOCK[0]+92:.0f}px;top:{LOCK[1]-48:.0f}px;color:var(--text);
+  font-size:96px;font-weight:900;letter-spacing:-.03em;line-height:1;opacity:0}}
+.fact{{position:absolute;width:1500px;text-align:center;left:{LOCK[0]-540:.0f}px;
+  color:var(--text-muted);font-size:32px;opacity:0}}
+#url{{position:absolute;width:1500px;text-align:center;left:{LOCK[0]-540:.0f}px;top:812px;
+  color:var(--accent);font-size:30px;font-weight:500;opacity:0}}
+</style></head><body>
+<div id="root" data-composition-id="rmblr" data-width="{W}" data-height="{H}"
+     data-fps="{FPS}" data-duration="{DUR}">
+  <div class="clip lay" id="film" data-start="0" data-duration="{DUR}" data-track-index="0">
+    <div id="bloom"></div>
+    <div id="stage">
+      <div id="screen">{whatsapp(DP)}{gmail(DP)}{slack(DP)}{keyboard(DP)}</div>
+      <div id="scrim"></div>
+      {chips_html}
+      <div id="trail"></div>
+      <div id="orb">
+        <div id="halo"></div>
+        <div id="body">{wave_svg("wave")}<div id="tglyph">文A</div>
+          <svg id="ring" viewBox="0 0 100 100" fill="none"><circle id="ringarc" cx="50" cy="50"
+            r="42" stroke="#FFF" stroke-width="{3/(52*0.46)*100:.2f}" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+      <div id="thumb"></div>
+    </div>
+    <div id="claim"><div id="big"></div><div id="small"></div></div>
+    {wave_svg("lockmark")}
+    <div id="lockword">RMBLR</div>
+    <div class="fact" id="fact1" style="top:690px">Your own API key. No account. No subscription.</div>
+    <div class="fact" id="fact2" style="top:744px">A dictionary of your own words. Open source, MIT.</div>
+    <div id="url">github.com/Past-da-king/rmblr</div>
+  </div>
+</div>
+<script src="vendor/gsap.min.js"></script>
+<script>
+(function(){{
+const $=s=>document.querySelector(s), $$=s=>document.getElementById(s);
+const PHASES={js(PHASES)}, FIELDTEXT={js(FIELDTEXT)}, CARET={js(CARET)}, CLAIMS={js(CLAIMS)};
+const TONES={{wa:{TONES['wa']},gm:{TONES['gm']},sl:{TONES['sl']}}};
+const BARS={BARS};
+const COL={{idle:"#15171B",recording:"#E05561",working:"#7C6CFF",done:"#4FBF87",gone:"#15171B"}};
+const body=$("#body"),halo=$("#halo"),wave=$("#wave"),tglyph=$("#tglyph"),ring=$("#ring"),
+      ringarc=$("#ringarc"),big=$("#big"),small=$("#small"),
+      bars=[].slice.call(document.querySelectorAll("#wave .wb"));
+const pick=(r,t)=>{{let v=null;for(const x of r) if(t>=x[0]&&t<x[1]) v=x; return v;}};
+const last=(r,t)=>{{let v=null;for(const x of r) if(t>=x[0]) v=x; return v;}};
+
+/* a deterministic stand-in for a voice — three incommensurable sines, so it
+   never settles into a clean repeating cycle. Pure function of t, so it seeks. */
+const level=t=>Math.max(0,Math.min(1,0.52+0.46*(
+  0.60*Math.sin(2*Math.PI*3.10*t)+0.30*Math.sin(2*Math.PI*7.30*t+1.1)
+ +0.25*Math.sin(2*Math.PI*1.70*t+2.3))));
+
+function paint(t){{
+  const ph=(pick(PHASES,t)||[0,0,"idle"])[2];
+  body.style.background=COL[ph];
+  const rec=ph==="recording", lv=rec?level(t):0;
+  halo.style.opacity=rec?1:0;
+  halo.style.transform="scale("+(1+lv*0.35).toFixed(4)+")";
+  for(let i=0;i<5;i++){{
+    const h=Math.min(BARS[i]*(1+lv*(i===2?0.15:0.30)),1.0);
+    bars[i].setAttribute("y1",(50-h*50).toFixed(2));
+    bars[i].setAttribute("y2",(50+h*50).toFixed(2));
+  }}
+  const tr=(t>={TRANSLATE_ON}&&t<{TRANSLATE_OFF});
+  const onAcc=(ph!=="idle"&&ph!=="gone");
+  wave.style.opacity=tr?0:1; tglyph.style.opacity=tr?1:0;
+  wave.style.color=tglyph.style.color=onAcc?"#FFFFFF":"#EDEFF3";
+  if(ph==="working"){{
+    ring.style.opacity=1; wave.style.opacity=0; tglyph.style.opacity=0;
+    const ang=(t*1000/900*360)%360, p=(t*1000%2200)/1100, tri=p<1?p:2-p;
+    const sw=40+220*(tri<0.5?2*tri*tri:1-Math.pow(-2*tri+2,2)/2), C=2*Math.PI*42;
+    ringarc.setAttribute("stroke-dasharray",(C*sw/360).toFixed(2)+" "+(C*2).toFixed(2));
+    ringarc.setAttribute("transform","rotate("+(ang-90).toFixed(2)+" 50 50)");
+  }} else ring.style.opacity=0;
+
+  /* the field: nothing until the load finishes, then the whole string at once */
+  ["wa-txt","gm-txt","sl-txt"].forEach(id=>{{
+    const e=last(FIELDTEXT.filter(r=>r[1]===id),t); $$(id).textContent=e?e[2]:"";
+  }});
+  const cw=pick(CARET,t);
+  document.querySelectorAll(".caret").forEach(c=>c.style.opacity=0);
+  if(cw){{ const c=$$(cw[2]).querySelector(".caret");
+    if(c) c.style.opacity=(Math.floor(t*2)%2===0)?1:0; }}
+
+  const cl=pick(CLAIMS,t), bt=cl?cl[2]:"";
+  big.textContent=bt; small.textContent=cl?cl[3]:"";
+  big.className=["TAP","HOLD","FLICK","DRAG","DOUBLE TAP"].includes(bt)?"gest":"";
+
+  const set = t<13.5?TONES.wa : (t<18.0?TONES.gm : TONES.sl);
+  for(let i=0;i<5;i++){{ $$("txA"+i).textContent=set[i]; $$("txB"+i).textContent=set[i]; }}
+}}
+
+const tl=gsap.timeline({{paused:true}}), E="power3.out", IR={{immediateRender:false}};
+tl.to({{p:0}},{{p:1,duration:{DUR},ease:"none",onUpdate:function(){{paint(this.targets()[0].p*{DUR});}}}},0);
+
+/* ── the camera. v1 never moved and the arc paid for it in legibility. ── */
+function cam(at,dur,s,sx,sy,fx,fy){{   /* put stage point (sx,sy) at frame (fx,fy) */
+  tl.to("#stage",{{scale:s,x:fx-sx*s,y:fy-sy*s,duration:dur,ease:"power2.inOut"}},at);
+}}
+gsap.set("#stage",{{transformOrigin:"0px 0px",scale:1,x:0,y:0}});
+const HX={HOME[0]}, HY={HOME[1]}, PX={PARKED[0]}, PY={PARKED[1]};
+cam(0.00,0.01,1.00,960,540,960,540);            /* the whole phone, at rest */
+cam(3.55,0.85,1.45,HX,HY,690,500);              /* in on the orb for the tap */
+cam(8.05,0.75,1.45,HX,HY,700,500);              /* room for the arc, clear of the copy */
+cam(13.52,0.40,1.00,960,540,960,540);           /* see that it is Gmail */
+cam(14.45,0.60,1.45,HX,HY,690,500);             /* then in for the flick */
+cam(18.05,0.85,1.00,960,540,960,540);           /* out — you have to see where it goes */
+cam(20.55,0.75,1.45,PX,PY,450,470);
+cam(23.05,0.70,1.45,PX,PY,450,470);
+cam(26.05,1.00,1.00,960,540,960,540);
+
+function thumbIn(at,x,y,d){{ tl.fromTo("#thumb",{{opacity:0,x:x,y:{H}+120}},
+  {{opacity:1,x:x,y:y,duration:d,ease:E,immediateRender:false}},at); }}
+function thumbOut(at,x,y,d){{ tl.fromTo("#thumb",{{opacity:1,x:x,y:y}},
+  {{opacity:0,x:x,y:{H}+120,duration:d,ease:"power2.in",immediateRender:false}},at); }}
+function tap(at){{ tl.fromTo("#thumb",{{scale:1}},{{scale:0.84,duration:0.08,yoyo:true,repeat:1,
+  ease:"power2.out",immediateRender:false}},at); }}
+function fan(at,tag,pts,dur){{        /* the arc springs out of the orb */
+  for(let i=0;i<5;i++) tl.fromTo("#ch"+tag+i,
+    {{opacity:0,scale:0.55,x:pts[i][0],y:pts[i][1]}},
+    {{opacity:1,scale:1,x:0,y:0,duration:dur,ease:"back.out(1.3)",immediateRender:false}},at+i*0.04);
+}}
+function unfan(at,tag,pts){{
+  for(let i=0;i<5;i++) tl.to("#ch"+tag+i,{{opacity:0,scale:0.6,x:pts[i][0],y:pts[i][1],
+    duration:0.24,ease:"power2.in"}},at+i*0.02);
+}}
+const DA={[[round(HOME[0]-CH_W/2-x,1), round(HOME[1]-CH_H/2-y,1)] for x,y in CH_A]};
+const DB={[[round(PARKED[0]-CH_W/2-x,1), round(PARKED[1]-CH_H/2-y,1)] for x,y in CH_B]};
+function veil(at,dur,on){{
+  tl.to("#scrim",{{opacity:on?0.42:0,duration:dur,ease:on?E:"power2.in"}},at);
+  tl.to("#screen",{{filter:on?"blur(3px)":"blur(0px)",duration:dur,ease:on?E:"power2.in"}},at);
+}}
+
+/* ═ F1 · the orb appears because a field took the cursor ═ */
+tl.fromTo("#orb",{{opacity:0,scale:0.72}},{{opacity:1,scale:1,duration:0.14,ease:E,...IR}},2.00);
+tl.fromTo("#claim",{{opacity:0,y:16}},{{opacity:1,y:0,duration:0.45,ease:E,...IR}},0.90);
+
+/* ═ F2 · TAP — record, load, and the text LANDS whole ═ */
+thumbIn(3.85,HX,HY,0.55); tap(4.45); thumbOut(4.62,HX,HY,0.30);
+
+/* ═ F3 · HOLD — the arc ═ */
+thumbIn(8.30,HX,HY,0.50);
+veil(8.85,0.26,true); fan(8.90,"A",DA,0.46);
+tl.to("#thumb",{{x:HX-130,y:HY-110,duration:0.55,ease:"power2.inOut"}},9.55);
+tl.to("#thumb",{{x:HX-172,y:HY+4,duration:0.55,ease:"power2.inOut"}},10.20);
+[[9.85,0],[10.35,1],[10.80,0]].forEach(s=>tl.call(()=>{{
+  for(let i=0;i<5;i++) $$("chA"+i).classList.toggle("on",i===s[1]);}},null,s[0]));
+tl.call(()=>{{for(let i=0;i<5;i++) $$("chA"+i).classList.remove("on");}},null,11.30);
+thumbOut(11.15,HX-172,HY+4,0.28); unfan(11.15,"A",DA); veil(11.24,0.26,false);
+
+/* ═ F4 · Gmail — the app changes, and so does the arc ═ */
+tl.to("#wa",{{opacity:0,duration:0.22,ease:"none"}},13.52);
+tl.fromTo("#gm",{{opacity:0}},{{opacity:1,duration:0.22,ease:"none",...IR}},13.64);
+thumbIn(14.85,HX,HY,0.42);
+tl.to("#thumb",{{x:HX-210,y:HY-160,duration:0.16,ease:"power2.in"}},15.36);   /* the flick */
+tl.to("#thumb",{{opacity:0,duration:0.09}},15.49);
+tl.fromTo("#chA0",{{opacity:0,scale:0.9,x:0,y:0}},{{opacity:1,scale:1,x:0,y:0,duration:0.07,...IR}},15.34);
+tl.to("#chA0",{{opacity:0,duration:0.12}},15.46);
+tl.call(()=>$$("chA0").classList.add("on"),null,15.34);
+tl.call(()=>$$("chA0").classList.remove("on"),null,15.60);
+
+/* ═ F5 · Slack — DRAG it somewhere else, then a third set of tones ═ */
+tl.to("#gm",{{opacity:0,duration:0.22,ease:"none"}},18.02);
+tl.fromTo("#sl",{{opacity:0}},{{opacity:1,duration:0.22,ease:"none",...IR}},18.14);
+thumbIn(18.70,HX,HY,0.45);
+/* the first and only time the orb moves — and your thumb is what moves it */
+tl.fromTo("#trail",{{opacity:0,x:HX,y:HY}},{{opacity:.85,duration:0.18,...IR}},19.25);
+tl.to("#orb",{{x:PX-HX,y:PY-HY,duration:0.95,ease:"power2.inOut"}},19.30);
+tl.to("#thumb",{{x:PX,y:PY,duration:0.95,ease:"power2.inOut"}},19.30);
+tl.to("#trail",{{opacity:0,duration:0.35}},20.30);
+thumbOut(20.35,PX,PY,0.28);
+thumbIn(21.20,PX,PY,0.42);
+veil(21.65,0.24,true); fan(21.70,"B",DB,0.42);
+tl.to("#thumb",{{x:PX-186,y:PY+8,duration:0.5,ease:"power2.inOut"}},22.05);
+tl.call(()=>$$("chB2").classList.add("on"),null,22.35);
+tl.call(()=>$$("chB2").classList.remove("on"),null,22.85);
+thumbOut(22.78,PX-186,PY+8,0.26); unfan(22.78,"B",DB); veil(22.86,0.24,false);
+
+/* ═ F6 · back in WhatsApp — DOUBLE TAP translates ═ */
+tl.to("#sl",{{opacity:0,duration:0.20,ease:"none"}},23.00);
+tl.to("#wa",{{opacity:1,duration:0.20,ease:"none"}},23.00);
+thumbIn(23.30,PX,PY,0.36); tap(23.66); tap(23.84); thumbOut(24.00,PX,PY,0.26);
+
+/* ═ F7 · the lockup — the app stops being in the way ═ */
+tl.to(["#screen","#claim"],{{opacity:0,duration:0.55,ease:"power2.inOut"}},26.30);
+tl.to("#orb",{{x:{LOCK[0]}-HX,y:{LOCK[1]}-HY,duration:0.85,ease:"power2.inOut"}},26.30);
+tl.to("#body",{{opacity:0,duration:0.30}},27.05);
+tl.fromTo("#lockmark",{{opacity:0,scale:1}},{{opacity:1,scale:3.3,duration:0.70,ease:E,...IR}},27.10);
+tl.to("#orb",{{opacity:0,duration:0.22,ease:"none"}},27.15);
+tl.fromTo("#lockword",{{opacity:0,x:-28}},{{opacity:1,x:0,duration:0.58,ease:E,...IR}},27.35);
+tl.fromTo("#fact1",{{opacity:0,y:12}},{{opacity:1,y:0,duration:0.42,ease:E,...IR}},28.05);
+tl.fromTo("#fact2",{{opacity:0,y:12}},{{opacity:1,y:0,duration:0.42,ease:E,...IR}},28.50);
+tl.fromTo("#url",{{opacity:0,y:10}},{{opacity:1,y:0,duration:0.42,ease:E,...IR}},29.05);
+
+paint(0);
+window.__timelines=window.__timelines||{{}};
+window.__timelines["rmblr"]=tl;
+}})();
+</script></body></html>
+"""
+open(OUT, "w", encoding="utf-8").write(HTML)
+print(f"wrote index.html ({len(HTML)} bytes)  orb home {HOME} parked {PARKED}")

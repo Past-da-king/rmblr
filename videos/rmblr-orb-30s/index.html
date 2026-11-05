@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>RMBLR</title><style>
+@font-face{font-family:Roboto;src:url(assets/fonts/roboto-latin-400-normal.woff2)format('woff2');font-weight:400;font-display:block}
+@font-face{font-family:Roboto;src:url(assets/fonts/roboto-latin-500-normal.woff2)format('woff2');font-weight:500;font-display:block}
+@font-face{font-family:Roboto;src:url(assets/fonts/roboto-latin-700-normal.woff2)format('woff2');font-weight:700;font-display:block}
+@font-face{font-family:Roboto;src:url(assets/fonts/roboto-latin-900-normal.woff2)format('woff2');font-weight:900;font-display:block}
+@font-face{font-family:NotoJP;src:url(assets/fonts/noto-sans-jp-japanese-500-normal.woff2)format('woff2');font-weight:500;font-display:block}
+
+:root{
+  --dp:1px;
+  --ink:#0A0B0D; --slate:#15171B; --line:#2B2F37;
+  --paper:#F2F4F8; --dim:#8D95A3;
+  --indigo:#7C6CFF; --deep:#2A2394; --red:#E05561; --green:#4FBF87;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000}
+#root{position:relative;width:1920px;height:1080px;overflow:hidden;background:#07080B;
+  font-family:Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.lay{position:absolute;inset:0}
+#ground{position:absolute;inset:0;z-index:0;
+  background:
+    radial-gradient(1400px 900px at 50% 46%, rgba(124,108,255,.075), rgba(124,108,255,0) 70%),
+    radial-gradient(900px 700px at 50% 50%, rgba(255,255,255,.035), rgba(255,255,255,0) 72%),
+    repeating-linear-gradient(0deg,rgba(255,255,255,.020) 0 1px,transparent 1px 64px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.020) 0 1px,transparent 1px 64px);}
+#vig{position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(ellipse 82% 70% at 50% 48%,transparent 0%,rgba(0,0,0,.42) 78%,rgba(0,0,0,.72) 100%)}
+
+/* flat colour fields — the frame's own ground, which changes on the beat */
+.field{position:absolute;inset:0}
+#f-indigo{background:var(--indigo)}
+#f-paper{background:var(--paper)}
+#f-deep{background:var(--deep)}
+
+/* the phone: flat. A dark rectangle with a hairline, no bezel gradient, no
+   shadow, no tilt. It is furniture, and the app inside it is the truth. */
+#dev{position:absolute;width:419px;height:877px;background:#141519;
+  border-radius:48px;padding:13px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.11),
+             inset 0 0 0 3px #0C0D10,
+             0 2px 0 0 rgba(255,255,255,.05),
+             0 40px 90px rgba(0,0,0,.75)}
+.scr{position:relative;width:393px;height:851px;overflow:hidden;border-radius:36px;background:#0B141A}
+
+/* THE ONE CIRCLE */
+#orb{position:absolute;width:52px;height:52px;border-radius:50%;background:var(--slate);
+  display:grid;place-items:center;z-index:40}
+#orbring{position:absolute;inset:-5px;border-radius:50%;border:1.5px solid var(--red);opacity:0}
+#wave{width:23.92px;height:23.92px;color:var(--paper);display:block}
+#glyph{position:absolute;font-family:NotoJP,Roboto,sans-serif;font-size:26px;font-weight:500;
+  color:var(--paper);opacity:0;line-height:1}
+
+/* kinetic type — masked by moving blocks, never faded in softly */
+.tw{position:absolute;overflow:hidden}
+.tw > span{display:block}
+#slam{position:absolute;left:0;right:0;text-align:center;color:var(--paper);
+  font-size:210px;font-weight:900;letter-spacing:-.035em;line-height:1;opacity:0;z-index:26}
+#head{position:absolute;color:var(--paper);font-size:78px;font-weight:900;letter-spacing:-.03em;
+  line-height:1.02;white-space:pre-line}
+#sub{position:absolute;color:var(--dim);font-size:30px;font-weight:500;letter-spacing:.01em;
+  line-height:1.35;white-space:pre-line}
+
+/* the five tone bands — the arc, re-imagined as a stack of flat rows */
+#bands{position:absolute;inset:0;opacity:0}
+.band{position:absolute;left:0;width:1920px;height:216px;display:flex;align-items:center;
+  padding-left:330px;transform-origin:0 50%}
+.band b{font-size:104px;font-weight:900;letter-spacing:-.02em}
+
+/* the flat waveform: rectangles, not a glow */
+#meter{position:absolute;display:flex;align-items:center;gap:14px;opacity:0;z-index:30}
+.mbar{width:26px;background:var(--paper)}
+
+/* the streak the flick leaves — hard rectangles, no motion blur */
+.streak{position:absolute;top:514px;height:52px;border-radius:26px;background:var(--indigo);opacity:0}
+
+/* the grid of places the orb could live */
+#dots{position:absolute;opacity:0}
+.dot{position:absolute;width:10px;height:10px;border-radius:50%;background:var(--line)}
+
+.chip{position:absolute;height:56px;display:flex;align-items:center;padding:0 26px;
+  font-size:26px;font-weight:700;letter-spacing:.01em;background:var(--slate);color:var(--dim);
+  border:1px solid var(--line);opacity:0}
+.chip.on{background:var(--indigo);color:#fff;border-color:var(--indigo)}
+
+#tonelist{position:absolute;left:1010px;top:606px;width:800px}
+.trow{overflow:hidden;height:58px}
+.trow > span{display:block;font-size:44px;font-weight:900;letter-spacing:-.02em;color:var(--paper);
+  line-height:58px}
+.trow > span i{font-style:normal;color:var(--indigo)}
+#pulse{position:absolute;inset:-5px;border-radius:50%;border:1.5px solid var(--indigo);opacity:0}
+#zulu{color:#0A0B0D;font-size:72px;font-weight:900;letter-spacing:-.03em;
+  line-height:1.08;white-space:pre-line}
+/* ── THE SIGNATURE: the orb is the transition. Every scene change happens
+      THROUGH it — it swells from the orb's exact position until it IS the frame,
+      the next beat plays inside it, then it collapses back to 52dp and drops onto
+      the phone. The circle is the wipe, which means the film is one object
+      transforming rather than a run of cuts, and it reinforces the shape rule
+      every single time it fires. ── */
+#wipe{position:absolute;width:52px;height:52px;border-radius:50%;background:var(--indigo);
+  z-index:20;transform:scale(0)}
+
+/* shutters — the frame splitting into columns or rows that move independently */
+.sh{position:absolute;top:0;height:1080px;background:var(--ink);z-index:22}
+.shr{position:absolute;left:0;width:1920px;background:var(--ink);z-index:22}
+
+/* the tone slot: the five names run past at speed and SLAM onto the one you took */
+#slot{position:absolute;left:0;width:1920px;top:465px;height:150px;overflow:hidden;z-index:24;opacity:0}
+#slotinner{position:absolute;left:0;width:1920px}
+.slotrow{height:150px;display:flex;align-items:center;justify-content:center;
+  font-size:118px;font-weight:900;letter-spacing:-.03em;color:var(--paper)}
+#slotrule{position:absolute;left:660px;width:600px;height:5px;background:var(--ink);
+  top:612px;z-index:25;opacity:0;transform-origin:50% 50%}
+
+/* the numeral that indexes each gesture */
+#num{position:absolute;left:118px;top:104px;font-size:150px;font-weight:900;color:var(--ink);
+  opacity:0;letter-spacing:-.04em;z-index:26}
+#label{position:absolute;left:120px;top:96px;font-size:26px;font-weight:900;letter-spacing:.22em;
+  color:var(--dim);z-index:12}
+
+/* the voice, full width — 21 flat columns, no glow */
+#wide{position:absolute;left:0;width:1920px;top:760px;height:230px;display:flex;
+  align-items:center;justify-content:center;gap:18px;opacity:0;z-index:12}
+.wbar{width:38px;background:var(--paper)}
+#prog{position:absolute;left:0;top:970px;width:1920px;height:8px;background:var(--indigo);
+  transform-origin:0 50%;opacity:0;z-index:12}
+
+/* ── the static text card. Zero motion by design: all three reference films hold
+      their type dead still, and the stillness is what gives it authority. ── */
+#card{position:absolute;inset:0;background:#07080B;z-index:30;opacity:0}
+#card::before{content:"";position:absolute;inset:0;
+  background:radial-gradient(1200px 800px at 50% 50%, rgba(124,108,255,.07), transparent 70%)}
+#cardtext{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;
+  color:var(--paper);font-size:150px;font-weight:900;letter-spacing:-.035em;line-height:1.02;
+  white-space:pre-line}
+#cardsub{position:absolute;left:0;right:0;top:50%;margin-top:130px;text-align:center;
+  color:var(--dim);font-size:30px;font-weight:700;letter-spacing:.2em}
+
+/* ── the flash-flood ending: the brand colour is held back for 27 seconds and
+      then floods the frame at 100%. Arc's move, and the reason their accent lands. ── */
+#flood{position:absolute;inset:0;background:var(--indigo);z-index:32;opacity:0}
+#fmark{position:absolute;color:#fff}
+#fword{position:absolute;color:#fff;font-size:132px;font-weight:900;letter-spacing:-.035em;
+  line-height:1;opacity:0}
+.ffact{position:absolute;left:0;width:1920px;text-align:center;color:rgba(255,255,255,.82);
+  font-size:31px;font-weight:700;opacity:0}
+#furl{position:absolute;left:0;width:1920px;text-align:center;color:#fff;font-size:31px;
+  font-weight:900;opacity:0}
+#tag{position:absolute;left:96px;bottom:78px;color:var(--dim);font-size:24px;font-weight:900;
+  letter-spacing:.24em;z-index:28}
+
+#lockmark{position:absolute;color:var(--paper)}
+#lockword{position:absolute;color:var(--paper);font-size:132px;font-weight:900;
+  letter-spacing:-.035em;line-height:1;opacity:0}
+.fact{position:absolute;color:var(--dim);font-size:31px;font-weight:500;opacity:0}
+#url{position:absolute;color:var(--indigo);font-size:31px;font-weight:700;opacity:0}
+
+
+#wa{background:#0B141A}
+#wa::before{content:"";position:absolute;inset:0;opacity:.045;
+  background-image:radial-gradient(circle at 12% 14%,#fff 1.6px,transparent 1.7px),
+                   radial-gradient(circle at 62% 32%,#fff 1.2px,transparent 1.3px),
+                   radial-gradient(circle at 34% 68%,#fff 1.8px,transparent 1.9px),
+                   radial-gradient(circle at 82% 82%,#fff 1.3px,transparent 1.4px);
+  background-size:calc(90*var(--dp)) calc(90*var(--dp))}
+.wa-head{position:absolute;left:0;top:0;right:0;height:calc(56*var(--dp));background:#1F2C34;
+  display:flex;align-items:center;padding:0 calc(10*var(--dp))}
+.wa-back{color:#AEBAC1;font-size:calc(26*var(--dp));width:calc(22*var(--dp));line-height:1}
+.wa-av{width:calc(34*var(--dp));height:calc(34*var(--dp));border-radius:50%;
+  background:linear-gradient(150deg,#6A7B87,#3B4A54);margin:0 calc(10*var(--dp)) 0 calc(2*var(--dp))}
+.wa-name{color:#E9EDEF;font-size:calc(16*var(--dp));font-weight:500;position:absolute;
+  left:calc(60*var(--dp));top:calc(11*var(--dp))}
+.wa-on{color:#A9B4BB;font-size:calc(11.5*var(--dp));position:absolute;
+  left:calc(60*var(--dp));top:calc(31*var(--dp))}
+.wa-ic{width:calc(19*var(--dp));height:calc(19*var(--dp));border:2px solid #AEBAC1;
+  margin-left:auto;opacity:.9}
+.wa-ic1{border-radius:3px}
+.wa-ic2{border-radius:50%;margin-left:calc(18*var(--dp))}
+.wa-dots{color:#AEBAC1;font-size:calc(19*var(--dp));margin-left:calc(14*var(--dp))}
+.wa-day{position:absolute;left:50%;top:calc(72*var(--dp));transform:translateX(-50%);
+  background:#182229;color:#A9B4BB;font-size:calc(11*var(--dp));font-weight:500;
+  padding:calc(4*var(--dp)) calc(11*var(--dp));border-radius:calc(7*var(--dp));letter-spacing:.04em}
+.wa-b{position:absolute;border-radius:calc(8*var(--dp));padding:calc(6*var(--dp)) calc(9*var(--dp));
+  padding-right:calc(46*var(--dp))}
+.wa-t{color:#E9EDEF;font-size:calc(14.5*var(--dp));line-height:1.32;display:block}
+.wa-m{position:absolute;right:calc(8*var(--dp));bottom:calc(5*var(--dp));color:#D2DCE0;
+  font-size:calc(10.5*var(--dp))}
+.wa-tk{color:#7CCDF0;margin-left:calc(3*var(--dp));font-size:calc(10*var(--dp))}
+.wa-bar{position:absolute;left:0;right:0;top:calc(452*var(--dp));height:calc(64*var(--dp));
+  display:flex;align-items:center;padding:0 calc(8*var(--dp));gap:calc(7*var(--dp))}
+.wa-field{flex:1;height:calc(48*var(--dp));background:#2A3942;border-radius:calc(24*var(--dp));
+  display:flex;align-items:center;padding:0 calc(13*var(--dp));gap:calc(9*var(--dp));overflow:hidden}
+.wa-emo,.wa-clip{color:#A9B4BB;font-size:calc(19*var(--dp))}
+.wa-clip{margin-left:auto}
+.wa-send{width:calc(48*var(--dp));height:calc(48*var(--dp));border-radius:50%;background:#00A884;
+  display:grid;place-items:center;font-size:calc(21*var(--dp))}
+
+#gm{background:#1F1F1F}
+.gm-head{position:absolute;left:0;top:0;right:0;height:calc(56*var(--dp));
+  display:flex;align-items:center;padding:0 calc(14*var(--dp))}
+.gm-x{color:#E8EAED;font-size:calc(19*var(--dp))}
+.gm-clip{margin-left:auto;font-size:calc(18*var(--dp));opacity:.85}
+.gm-snd{color:#8AB4F8;font-size:calc(20*var(--dp));margin-left:calc(20*var(--dp))}
+.gm-dots{color:#E8EAED;font-size:calc(19*var(--dp));margin-left:calc(18*var(--dp))}
+.gm-row{position:absolute;left:calc(16*var(--dp));right:calc(16*var(--dp));height:calc(46*var(--dp));
+  border-bottom:1px solid #3C4043;display:flex;align-items:center;gap:calc(14*var(--dp))}
+.gm-k{color:#9AA0A6;font-size:calc(14*var(--dp));width:calc(62*var(--dp))}
+.gm-v{color:#E8EAED;font-size:calc(15*var(--dp))}
+.gm-body{position:absolute;left:calc(16*var(--dp));right:calc(16*var(--dp));top:calc(212*var(--dp));
+  min-height:calc(60*var(--dp));display:flex;align-items:flex-start;flex-wrap:wrap}
+.gm-sig{position:absolute;left:calc(16*var(--dp));top:calc(470*var(--dp));color:#8A8F94;
+  font-size:calc(13*var(--dp))}
+
+#sl{background:#1A1D21}
+.sl-head{position:absolute;left:0;top:0;right:0;height:calc(50*var(--dp));
+  border-bottom:1px solid #35373B;display:flex;align-items:center;padding:0 calc(16*var(--dp));
+  gap:calc(3*var(--dp))}
+.sl-hash{color:#ABABAD;font-size:calc(19*var(--dp))}
+.sl-ch{color:#D1D2D3;font-size:calc(17*var(--dp));font-weight:700}
+.sl-mem{margin-left:auto;color:#ABABAD;font-size:calc(13*var(--dp))}
+.sl-m{position:absolute;left:calc(16*var(--dp));right:calc(16*var(--dp))}
+.sl-av{position:absolute;left:0;top:0;width:calc(36*var(--dp));height:calc(36*var(--dp));
+  border-radius:calc(8*var(--dp));display:grid;place-items:center;color:#fff;font-weight:700;
+  font-size:calc(16*var(--dp))}
+.sl-n{position:absolute;left:calc(48*var(--dp));top:0;color:#D1D2D3;font-size:calc(15*var(--dp));
+  font-weight:700}
+.sl-tm{position:absolute;left:calc(48*var(--dp));top:0;color:#B6B6B8;font-size:calc(12*var(--dp));
+  margin-left:calc(62*var(--dp))}
+.sl-tx{position:absolute;left:calc(48*var(--dp));top:calc(21*var(--dp));color:#D1D2D3;
+  font-size:calc(15*var(--dp));line-height:1.4}
+.sl-box{position:absolute;left:calc(12*var(--dp));right:calc(12*var(--dp));top:calc(368*var(--dp));
+  border:1px solid #565856;border-radius:calc(8*var(--dp));background:#222529;
+  padding:calc(8*var(--dp)) calc(10*var(--dp))}
+.sl-tools{color:#ABABAD;font-size:calc(13*var(--dp));display:flex;gap:calc(13*var(--dp));
+  padding-bottom:calc(7*var(--dp));border-bottom:1px solid #35373B;margin-bottom:calc(8*var(--dp))}
+.sl-in{min-height:calc(38*var(--dp));display:flex;align-items:center;flex-wrap:wrap}
+.sl-send{position:absolute;right:calc(9*var(--dp));bottom:calc(8*var(--dp));
+  width:calc(28*var(--dp));height:calc(28*var(--dp));border-radius:calc(5*var(--dp));
+  background:#007A5A;color:#fff;display:grid;place-items:center;font-size:calc(13*var(--dp))}
+
+#kb{position:absolute;left:0;right:0;top:calc(516*var(--dp));height:calc(335*var(--dp));
+  background:#1B1C1E;border-top:1px solid #2A2B2E}
+.kb-sug{height:calc(40*var(--dp));display:flex;align-items:center;justify-content:space-around;
+  color:#AAB0B6;font-size:calc(13*var(--dp));border-bottom:1px solid #2A2B2E}
+.kb-s1{color:#E8EAED;font-weight:500}
+.kb-k{position:absolute;width:calc(35.4*var(--dp));height:calc(44*var(--dp));
+  background:#2C2D30;border-radius:calc(5*var(--dp));display:grid;place-items:center;
+  color:#E8EAED;font-size:calc(16*var(--dp))}
+.kb-w{width:calc(48*var(--dp));background:#2D2E31;color:#B4BAC0;font-size:calc(14*var(--dp))}
+.kb-sp{width:calc(273*var(--dp));background:#2C2D30}
+.kb-go{background:#007A5F;color:#fff}
+
+/* v6 is built from hard cuts and macro crops, so every piece of v5 scenery is
+   dead weight — and its ink shutters were sitting at z-index 22 over the phone. */
+#wipe,.sh,.shr,#slot,#slotrule,#bands,#split,#splitlab,#splitlab2,#zuluw,.streak,
+#num,#label,#head,#sub,#rule,#slam,#tonelist,#fired,#trace,#meter,#wide,#prog,
+#lockmark,#lockword,.fact,#url{display:none!important}
+#world{position:absolute;inset:0;transform-origin:0 0}
+/* the arc, at 1dp — OrbUi's own chip metrics */
+.uchip{position:absolute;width:128px;height:34px;border-radius:17px;background:rgba(21,23,27,.96);
+  color:#9AA1AD;font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:center;
+  white-space:nowrap;border:1px solid #2B2F37;z-index:6;opacity:0}
+.uchip.on{background:var(--indigo);color:#fff;font-weight:700;border-color:var(--indigo)}
+/* every place the orb could live */
+#dots{position:absolute;left:0;top:0;width:393px;height:851px;z-index:5;opacity:0}
+.dot{position:absolute;width:5px;height:5px;border-radius:50%;background:#3A4048}
+#thumb{position:absolute;left:0;top:0;width:62px;height:62px;border-radius:50%;
+  margin-left:-31px;margin-top:-31px;background:rgba(237,239,243,.10);
+  border:2px solid rgba(237,239,243,.5);z-index:7;opacity:0}
+#dev{left:140.0px;top:101.5px}
+#devB_unused{position:absolute;width:419px;height:877px;background:#000;
+  border:1px solid var(--line);border-radius:26px;padding:13px;top:101.5px;opacity:0}
+#gm,#sl{opacity:0}
+#orb{left:427.0px;top:518.5px}
+#wipe{left:427.0px;top:518.5px}
+#fmark{left:579px;top:399px;width:202px;height:202px;opacity:0}
+#fword{left:821px;top:434px}
+#meter{left:505px;top:810px;height:190px}
+#head{left:1010px;top:392px;width:840px}
+#sub{left:1010px;top:592px;width:800px}
+#slam{top:436px}
+#split{position:absolute;inset:0;background:var(--indigo);opacity:0;transform-origin:100% 50%}
+#zuluw{overflow:hidden}
+#splitlab{position:absolute;right:96px;top:104px;color:#0A0B0D;font-size:64px;font-weight:900;
+  letter-spacing:-.02em;opacity:0}
+#splitlab2{position:absolute;left:620px;top:104px;color:var(--dim);font-size:64px;font-weight:900;
+  letter-spacing:-.02em;opacity:0}
+#rule{position:absolute;left:1010px;top:560px;width:640px;height:6px;background:var(--indigo);
+  transform-origin:0 50%}
+#lockmark{left:630px;top:439px;width:202px;height:202px;opacity:0}
+#lockword{left:870px;top:474px}
+.fact{left:0;width:1920px;text-align:center}
+#url{left:0;width:1920px;text-align:center;top:872px}
+#trace{position:absolute;height:6px;background:var(--indigo);transform-origin:0 50%;opacity:0}
+</style></head><body>
+<div id="root" data-composition-id="rmblr" data-width="1920" data-height="1080"
+     data-fps="60" data-duration="30.0">
+  <div class="clip lay" id="film" data-start="0" data-duration="30.0" data-track-index="0">
+
+    <div id="ground"></div>
+
+    <!-- the camera: paint() writes one transform here and the phone and the orb
+         move together, so a macro crop never has to be computed twice -->
+    <div id="world">
+      <div id="dev" class="dev"><div class="scr">
+<div class="app" id="wa">
+  <div class="wa-head">
+    <span class="wa-back" data-layout-allow-overlap data-layout-allow-occlusion>‹</span>
+    <span class="wa-av" data-layout-allow-overlap data-layout-allow-occlusion></span>
+    <span class="wa-name" data-layout-allow-overlap data-layout-allow-occlusion>Ash</span><span class="wa-on" data-layout-allow-overlap data-layout-allow-occlusion>online</span>
+    <span class="wa-ic wa-ic1"></span><span class="wa-ic wa-ic2"></span><span class="wa-dots" data-layout-allow-overlap data-layout-allow-occlusion>⋮</span>
+  </div>
+  <div class="wa-day" data-layout-allow-overlap data-layout-allow-occlusion>TODAY</div>
+  <div class="wa-b" style="left:10.0px;top:214.0px;max-width:250.0px;background:#202C33;border-bottom-left-radius:3px"><span class="wa-t" data-layout-allow-overlap data-layout-allow-occlusion>Still on for tonight?</span><span class="wa-m" data-layout-allow-overlap data-layout-allow-occlusion>18:41</span></div><div class="wa-b" style="left:10.0px;top:248.0px;max-width:250.0px;background:#202C33;border-bottom-left-radius:3px"><span class="wa-t" data-layout-allow-overlap data-layout-allow-occlusion>What time works for you?</span><span class="wa-m" data-layout-allow-overlap data-layout-allow-occlusion>18:41</span></div><div class="wa-b" style="right:10.0px;top:282.0px;max-width:250.0px;background:#005C4B;border-bottom-right-radius:3px"><span class="wa-t" data-layout-allow-overlap data-layout-allow-occlusion>Half seven I think</span><span class="wa-m" data-layout-allow-overlap data-layout-allow-occlusion>18:43<span class="wa-tk">✓✓</span></span></div><div class="wa-b" style="left:10.0px;top:316.0px;max-width:250.0px;background:#202C33;border-bottom-left-radius:3px"><span class="wa-t" data-layout-allow-overlap data-layout-allow-occlusion>Cool — where are we meeting?</span><span class="wa-m" data-layout-allow-overlap data-layout-allow-occlusion>18:44</span></div>
+  <div class="wa-bar">
+    <div class="wa-field"><span class="wa-emo" data-layout-allow-overlap data-layout-allow-occlusion>☺</span><span class="fieldtext" id="wa-txt" data-layout-allow-overlap data-layout-allow-occlusion></span><span class="caret"></span><span class="wa-clip" data-layout-allow-overlap data-layout-allow-occlusion>📎</span></div>
+    <div class="wa-send" data-layout-allow-overlap data-layout-allow-occlusion>🎤</div>
+  </div>
+</div>
+<div class="app" id="gm">
+  <div class="gm-head">
+    <span class="gm-x" data-layout-allow-overlap data-layout-allow-occlusion>✕</span>
+    <span class="gm-clip" data-layout-allow-overlap data-layout-allow-occlusion>📎</span><span class="gm-snd" data-layout-allow-overlap data-layout-allow-occlusion>➤</span><span class="gm-dots" data-layout-allow-overlap data-layout-allow-occlusion>⋮</span>
+  </div>
+  <div class="gm-row" style="top:60.0px"><span class="gm-k" data-layout-allow-overlap data-layout-allow-occlusion>From</span><span class="gm-v" data-layout-allow-overlap data-layout-allow-occlusion>ayanda@gmail.com</span></div><div class="gm-row" style="top:106.0px"><span class="gm-k" data-layout-allow-overlap data-layout-allow-occlusion>To</span><span class="gm-v" data-layout-allow-overlap data-layout-allow-occlusion>ash@—</span></div><div class="gm-row" style="top:152.0px"><span class="gm-k" data-layout-allow-overlap data-layout-allow-occlusion>Subject</span><span class="gm-v" data-layout-allow-overlap data-layout-allow-occlusion>Tonight</span></div>
+  <div class="gm-body"><span class="fieldtext" id="gm-txt" data-layout-allow-overlap data-layout-allow-occlusion></span><span class="caret"></span></div>
+  <div class="gm-sig" data-layout-allow-overlap data-layout-allow-occlusion>Sent from Gmail</div>
+</div>
+<div class="app" id="sl">
+  <div class="sl-head"><span class="sl-hash" data-layout-allow-overlap data-layout-allow-occlusion>#</span><span class="sl-ch" data-layout-allow-overlap data-layout-allow-occlusion>launch</span>
+    <span class="sl-mem" data-layout-allow-overlap data-layout-allow-occlusion>◍ 12</span></div>
+  <div class="sl-m" style="top:96.0px"><span class="sl-av" data-layout-allow-overlap data-layout-allow-occlusion style="background:#2EB67D">A</span><span class="sl-n" data-layout-allow-overlap data-layout-allow-occlusion>Ash</span><span class="sl-tm" data-layout-allow-overlap data-layout-allow-occlusion>18:41</span><span class="sl-tx" data-layout-allow-overlap data-layout-allow-occlusion>can someone own the launch note?</span></div><div class="sl-m" style="top:162.0px"><span class="sl-av" data-layout-allow-overlap data-layout-allow-occlusion style="background:#E01E5A">T</span><span class="sl-n" data-layout-allow-overlap data-layout-allow-occlusion>Thabo</span><span class="sl-tm" data-layout-allow-overlap data-layout-allow-occlusion>18:42</span><span class="sl-tx" data-layout-allow-overlap data-layout-allow-occlusion>I can review it tonight</span></div>
+  <div class="sl-box">
+    <div class="sl-tools" data-layout-allow-overlap data-layout-allow-occlusion><b>B</b><i>I</i><s>S</s><span>🔗</span><span>≡</span></div>
+    <div class="sl-in"><span class="fieldtext" id="sl-txt" data-layout-allow-overlap data-layout-allow-occlusion></span><span class="caret"></span></div>
+    <div class="sl-send" data-layout-allow-overlap data-layout-allow-occlusion>➤</div>
+  </div>
+</div><div id="kb"><div class="kb-sug" data-layout-allow-overlap data-layout-allow-occlusion><span data-layout-allow-overlap data-layout-allow-occlusion>Half</span><span class="kb-s1" data-layout-allow-overlap data-layout-allow-occlusion>half</span><span data-layout-allow-overlap data-layout-allow-occlusion>Have</span></div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:6.0px;top:48.0px">q</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:44.4px;top:48.0px">w</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:82.8px;top:48.0px">e</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:121.2px;top:48.0px">r</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:159.6px;top:48.0px">t</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:198.0px;top:48.0px">y</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:236.4px;top:48.0px">u</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:274.8px;top:48.0px">i</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:313.2px;top:48.0px">o</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:351.6px;top:48.0px">p</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:25.2px;top:100.0px">a</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:63.6px;top:100.0px">s</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:102.0px;top:100.0px">d</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:140.4px;top:100.0px">f</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:178.8px;top:100.0px">g</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:217.2px;top:100.0px">h</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:255.6px;top:100.0px">j</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:294.0px;top:100.0px">k</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:332.4px;top:100.0px">l</div><div class="kb-k kb-w" data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion style="left:12.6px;top:152.0px">⇧</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:63.6px;top:152.0px">z</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:102.0px;top:152.0px">x</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:140.4px;top:152.0px">c</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:178.8px;top:152.0px">v</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:217.2px;top:152.0px">b</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:255.6px;top:152.0px">n</div><div class="kb-k" data-layout-allow-overlap data-layout-allow-occlusion style="left:294.0px;top:152.0px">m</div><div class="kb-k kb-w" data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion style="left:332.4px;top:152.0px">⌫</div><div class="kb-k kb-w" data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion style="left:6.0px;top:204.0px">?123</div><div class="kb-k kb-sp" data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion style="left:60.0px;top:204.0px"></div><div class="kb-k kb-w kb-go" data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion data-layout-allow-overlap data-layout-allow-occlusion style="left:339.0px;top:204.0px">↵</div></div><div class="uchip" id="uc0" data-layout-allow-overlap data-layout-allow-occlusion style="left:206.0px;top:301.0px"></div><div class="uchip" id="uc1" data-layout-allow-overlap data-layout-allow-occlusion style="left:144.0px;top:342.4px"></div><div class="uchip" id="uc2" data-layout-allow-overlap data-layout-allow-occlusion style="left:120.0px;top:413.0px"></div><div class="uchip" id="uc3" data-layout-allow-overlap data-layout-allow-occlusion style="left:144.0px;top:483.6px"></div><div class="uchip" id="uc4" data-layout-allow-overlap data-layout-allow-occlusion style="left:206.0px;top:525.0px"></div><div id="dots"><div class="dot" style="left:26px;top:150px"></div><div class="dot" style="left:94px;top:150px"></div><div class="dot" style="left:162px;top:150px"></div><div class="dot" style="left:230px;top:150px"></div><div class="dot" style="left:298px;top:150px"></div><div class="dot" style="left:26px;top:212px"></div><div class="dot" style="left:94px;top:212px"></div><div class="dot" style="left:162px;top:212px"></div><div class="dot" style="left:230px;top:212px"></div><div class="dot" style="left:298px;top:212px"></div><div class="dot" style="left:26px;top:274px"></div><div class="dot" style="left:94px;top:274px"></div><div class="dot" style="left:162px;top:274px"></div><div class="dot" style="left:230px;top:274px"></div><div class="dot" style="left:298px;top:274px"></div><div class="dot" style="left:26px;top:336px"></div><div class="dot" style="left:94px;top:336px"></div><div class="dot" style="left:162px;top:336px"></div><div class="dot" style="left:230px;top:336px"></div><div class="dot" style="left:298px;top:336px"></div><div class="dot" style="left:26px;top:398px"></div><div class="dot" style="left:94px;top:398px"></div><div class="dot" style="left:162px;top:398px"></div><div class="dot" style="left:230px;top:398px"></div><div class="dot" style="left:298px;top:398px"></div></div><div id="thumb"></div></div></div>
+      <div id="orb"><div id="orbring"></div><div id="pulse"></div><svg id="wave" class="" viewBox="0 0 100 100" fill="none"><g stroke="currentColor" stroke-width="9.0909" stroke-linecap="round"><line class="wb" x1="10.00" x2="10.00" y1="33.00" y2="67.00"/><line class="wb" x1="28.18" x2="28.18" y1="17.00" y2="83.00"/><line class="wb" x1="46.36" x2="46.36" y1="0.00" y2="100.00"/><line class="wb" x1="64.55" x2="64.55" y1="14.00" y2="86.00"/><line class="wb" x1="82.73" x2="82.73" y1="29.00" y2="71.00"/></g></svg><div id="glyph">文A</div></div>
+    </div>
+
+    <div id="tag" data-layout-allow-overlap data-layout-allow-occlusion></div>
+    <div id="card"><div id="cardtext" data-layout-allow-overlap data-layout-allow-occlusion></div>
+      <div id="cardsub" data-layout-allow-overlap data-layout-allow-occlusion></div></div>
+
+    <div id="vig"></div>
+
+    <div id="flood">
+      <svg id="fmark" class="" viewBox="0 0 100 100" fill="none"><g stroke="currentColor" stroke-width="9.0909" stroke-linecap="round"><line class="wb" x1="10.00" x2="10.00" y1="33.00" y2="67.00"/><line class="wb" x1="28.18" x2="28.18" y1="17.00" y2="83.00"/><line class="wb" x1="46.36" x2="46.36" y1="0.00" y2="100.00"/><line class="wb" x1="64.55" x2="64.55" y1="14.00" y2="86.00"/><line class="wb" x1="82.73" x2="82.73" y1="29.00" y2="71.00"/></g></svg>
+      <div id="fword">RMBLR</div>
+      <div class="ffact" id="ff1" style="top:706px">Your own API key. No account. No subscription.</div>
+      <div class="ffact" id="ff2" style="top:760px">A dictionary of your own words. Open source, MIT.</div>
+      <div id="furl" style="top:836px">github.com/Past-da-king/rmblr</div>
+    </div>
+
+  </div>
+<script src="vendor/gsap.min.js"></script>
+<script>
+(function(){
+const $$=s=>document.getElementById(s);
+const PHASES=[[0.0,4.55,"idle"],[4.55,6.6,"recording"],[6.6,6.95,"working"],[6.95,7.45,"done"],[7.45,10.55,"idle"],[10.55,11.15,"recording"],[11.15,11.35,"working"],[11.35,11.85,"done"],[11.85,13.05,"idle"],[13.05,13.35,"recording"],[13.35,13.5,"working"],[13.5,14.0,"done"],[14.0,20.75,"idle"],[21.05,21.5,"recording"],[21.5,23.8,"idle"],[23.8,24.4,"recording"],[24.4,24.85,"working"],[24.85,25.35,"done"],[25.35,30.0,"idle"]],FIELDTEXT=[[0.0,"wa-txt",""],[6.95,"wa-txt","I'll be there at about half seven."],[11.35,"wa-txt","Yeah, half seven works — see you there."],[13.5,"wa-txt","half seven · bring the deck · ash drives"],[15.5,"wa-txt","Yeah, half seven works — see you there."],[22.85,"wa-txt","Thank you, I will see you tomorrow."],[24.85,"wa-txt","Ngiyabonga, ngizokubona kusasa."]],SHOTS=[[0.0,"orb",0,0,9.0,"wa",0],[1.25,"card",0,0,1.0,"wa",0],[2.25,"phone",196,425,1.0,"wa",0],[4.25,"phone",300,430,3.4,"wa",0],[4.75,"orb",0,0,9.0,"wa",0],[6.0,"card",0,0,1.0,"wa",0],[6.5,"phone",196,484,3.6,"wa",0],[8.0,"card",0,0,1.0,"wa",0],[8.5,"phone",213,430,2.6,"wa",1],[10.55,"phone",213,430,2.6,"wa",0],[11.0,"phone",196,484,3.6,"wa",0],[12.25,"card",0,0,1.0,"wa",0],[12.75,"phone",196,460,3.0,"wa",0],[14.0,"phone",196,425,1.0,"wa",0],[15.5,"phone",213,430,2.6,"gm",1],[17.0,"phone",213,430,2.6,"sl",1],[18.5,"card",0,0,1.0,"wa",0],[19.5,"card",0,0,1.0,"wa",0],[20.05,"phone",240,380,2.2,"wa",0],[20.6,"card",0,0,1.0,"wa",0],[21.05,"orb",0,0,9.0,"wa",0],[21.5,"card",0,0,1.0,"wa",0],[21.95,"phone",213,430,2.6,"wa",1],[22.4,"card",0,0,1.0,"wa",0],[22.85,"phone",196,484,3.6,"wa",0],[23.3,"card",0,0,1.0,"wa",0],[23.8,"orb",0,0,9.0,"wa",0],[24.5,"phone",196,425,1.0,"wa",0],[27.0,"flood",0,0,1.0,"wa",0]];
+const CARD=[[1.25,1.8,"52dp.","THE WHOLE CONTROL"],[1.8,2.25,"THAT'S THE\nWHOLE APP.",""],[6.0,6.5,"TAP","01"],[8.0,8.5,"HOLD","02"],[12.25,12.75,"FLICK","03"],[18.5,19.5,"THE TONES CHANGE\nWITH THE APP.",""],[19.5,20.05,"DRAG","04"],[20.6,21.05,"TAP","RECAP"],[21.5,21.95,"HOLD","RECAP"],[22.4,22.85,"FLICK","RECAP"],[23.3,23.8,"DOUBLE TAP","05"]],TAG=[[2.3,4.25,"RMBLR / 52dp"],[4.25,6.0,"LISTENING"],[6.5,8.0,"INSERTED AT THE CURSOR"],[8.5,11.0,"FIVE TONES"],[12.75,15.5,"NO MENU"],[15.5,18.5,"PER APP"],[24.6,27.0,"ENGLISH IN / ISIZULU OUT"]];
+const TONES={wa:['CASUAL', 'CLEAN UP', 'GRAMMAR', 'BULLETS', 'SUMMARY'],gm:['PROFESSIONAL', 'SUMMARY', 'CLEAN UP', 'GRAMMAR', 'BULLETS'],sl:['CLEAN UP', 'CASUAL', 'BULLETS', 'PROFESSIONAL', 'SUMMARY']};
+const BARS=[0.34, 0.66, 1.0, 0.72, 0.42];
+const COL={idle:"#15171B",recording:"#E05561",working:"#7C6CFF",done:"#4FBF87"};
+const orb=$$("orb"),orbring=$$("orbring"),wave=$$("wave"),glyph=$$("glyph"),
+      wbars=[].slice.call(document.querySelectorAll("#wave .wb"));
+const pick=(r,t)=>{let v=null;for(const x of r) if(t>=x[0]&&t<x[1]) v=x; return v;};
+const last=(r,t)=>{let v=null;for(const x of r) if(t>=x[0]) v=x; return v;};
+const level=t=>Math.max(0,Math.min(1,0.52+0.46*(
+  0.60*Math.sin(2*Math.PI*3.10*t)+0.30*Math.sin(2*Math.PI*7.30*t+1.1)
+ +0.25*Math.sin(2*Math.PI*1.70*t+2.3))));
+
+function paint(t){
+  /* THE CUT IS STATE. Resolve which shot we are in from t, then place the
+     camera and set visibility — no tweens, so every seek lands exactly right. */
+  const sh=last(SHOTS,t)||SHOTS[0], mode=sh[1], k=sh[4];
+  let tx,ty;
+  if(mode==="orb"){ tx=960-453*k; ty=540-544.5*k; }
+  else { tx=960-(153+sh[2])*k; ty=540-(114.5+sh[3])*k; }
+  $$("world").style.transform="translate("+tx.toFixed(2)+"px,"+ty.toFixed(2)+"px) scale("+k+")";
+  $$("dev").style.opacity   = (mode==="phone")?1:0;
+  $$("orb").style.opacity   = (mode==="phone"||mode==="orb")?1:0;
+  $$("card").style.opacity  = (mode==="card")?1:0;
+  $$("flood").style.opacity = (mode==="flood")?1:0;
+  $$("wa").style.opacity=sh[5]==="wa"?1:0;
+  $$("gm").style.opacity=sh[5]==="gm"?1:0;
+  $$("sl").style.opacity=sh[5]==="sl"?1:0;
+  for(let i=0;i<5;i++) $$("uc"+i).style.opacity=sh[6]?1:0;
+  const ph=(pick(PHASES,t)||[0,0,"idle"])[2];
+  const rec=ph==="recording", lv=rec?level(t):0;
+  orb.style.background=(t<1.90)?"#F2F4F8":COL[ph];
+  orbring.style.opacity=rec?1:0;
+  orbring.style.transform="scale("+(1+lv*0.30).toFixed(4)+")";
+  for(let i=0;i<5;i++){
+    const h=Math.min(BARS[i]*(1+lv*(i===2?0.15:0.30)),1.0);
+    wbars[i].setAttribute("y1",(50-h*50).toFixed(2));
+    wbars[i].setAttribute("y2",(50+h*50).toFixed(2));
+  }
+  const g=(t>=23.3&&t<23.8&&ph==="idle");
+  glyph.style.opacity=g?1:0; wave.style.opacity=g?0:1;
+
+  ["wa-txt","gm-txt","sl-txt"].forEach(id=>{
+    const e=last(FIELDTEXT.filter(r=>r[1]===id),t),el=$$(id); if(el) el.textContent=e?e[2]:"";
+  });
+  document.querySelectorAll("#dev .caret").forEach(c=>
+    c.style.opacity=(t>2.1&&t<26.0&&Math.floor(t*2)%2===0)?1:0);
+
+  const c=pick(CARD,t);
+  $$("cardtext").textContent=c?c[2]:""; $$("cardsub").textContent=c?c[3]:"";
+  const tg=pick(TAG,t); $$("tag").textContent=tg?tg[2]:"";
+  const set=t<15.0?TONES.wa:(t<16.35?TONES.wa:(t<17.65?TONES.gm:TONES.sl));
+  /* the three-app beat: whichever phone the frame is on owns the list */
+  const tset = (t>=15.50&&t<17.00)?TONES.gm : ((t>=17.00&&t<18.50)?TONES.sl : TONES.wa);
+  for(let i=0;i<5;i++) $$("uc"+i).textContent=tset[i];
+}
+
+const tl=gsap.timeline({paused:true}), IR={immediateRender:false};
+const OUT4="power4.out", INOUT="power3.inOut";
+gsap.set("#orb",{transformOrigin:"50% 50%"});
+gsap.set("#head span,#sub span,#zuluw span",{yPercent:100});
+gsap.set("#rule",{scaleX:0});
+gsap.set("#meter",{transformOrigin:"50% 100%"});
+tl.to({p:0},{p:1,duration:30.0,ease:"none",onUpdate:function(){paint(this.targets()[0].p*30.0);}},0);
+
+/* every reveal is a MASK, never a soft fade — flat design has no dissolve */
+function say(el,at,dur){ tl.fromTo(el+" span",{yPercent:100},
+  {yPercent:0,duration:dur||0.5,ease:OUT4,immediateRender:false},at); }
+function unsay(el,at){ tl.to(el+" span",{yPercent:-110,duration:0.35,ease:"power3.in"},at); }
+function slam(at){ tl.fromTo("#slam",{opacity:0,scaleX:1.25,scaleY:0.6},
+  {opacity:1,scaleX:1,scaleY:1,duration:0.26,ease:OUT4,immediateRender:false},at); }
+function unslam(at){ tl.to("#slam",{opacity:0,duration:0.14,ease:"none"},at); }
+function devTo(at,x,dur){ tl.to("#dev",{x:x,duration:dur||0.55,ease:OUT4},at); }
+function orbTo(at,dx,dy,sc,dur,ez){ tl.to("#orb",{x:dx,y:dy,scale:sc,duration:dur,ease:ez||OUT4},at); }
+
+gsap.set("#orb",{transformOrigin:"50% 50%"});
+
+/* Only genuine MOTION lives on the timeline now — the springs and the thumb.
+   Everything that is a cut is resolved from t by paint(). */
+tl.fromTo("#orb",{scale:0.5},{scale:1,duration:0.34,ease:"back.out(2.4)",...IR},2.60);
+tl.fromTo("#thumb",{opacity:0,x:300,y:900},
+  {opacity:1,x:300,y:430,duration:0.24,ease:OUT4,...IR},4.26);
+tl.fromTo("#thumb",{scale:1},{scale:0.8,duration:0.07,yoyo:true,repeat:1,ease:OUT4,...IR},4.52);
+tl.to("#thumb",{opacity:0,duration:0.06},4.66);
+/* the arc springs out with an OS-style overshoot, then the thumb walks it */
+for(let i=0;i<5;i++)
+  tl.fromTo("#uc"+i,{scale:0.5},
+    {scale:1,duration:0.30,ease:"back.out(2.8)",immediateRender:false},8.56+i*0.05);
+tl.fromTo("#thumb",{opacity:0,x:300,y:900},
+  {opacity:1,x:300,y:430,duration:0.22,ease:OUT4,...IR},8.58);
+/* chip centres, straight off fan_angle(): 116dp from the orb at (300,430) */
+tl.to("#thumb",{x:270,y:542,duration:0.46,ease:"power2.inOut"},8.92);   /* → SUMMARY */
+tl.to("#thumb",{x:184,y:430,duration:0.46,ease:"power2.inOut"},9.46);   /* → GRAMMAR */
+tl.to("#thumb",{x:270,y:318,duration:0.46,ease:"power2.inOut"},10.00);  /* → CASUAL  */
+tl.to("#thumb",{opacity:0,duration:0.08},10.42);
+[[9.24,4],[9.78,2],[10.30,0]].forEach(s=>tl.call(()=>{
+  for(let i=0;i<5;i++) $$("uc"+i).classList.toggle("on",i===s[1]);},null,s[0]));
+tl.call(()=>{for(let i=0;i<5;i++) $$("uc"+i).classList.remove("on");},null,10.52);
+/* the two other apps get the same spring */
+for(const at of [15.54,17.04])
+  for(let i=0;i<5;i++)
+    tl.fromTo("#uc"+i,{scale:0.5},
+      {scale:1,duration:0.26,ease:"back.out(2.8)",immediateRender:false},at+i*0.045);
+tl.call(()=>$$("uc0").classList.add("on"),null,16.30);
+tl.call(()=>$$("uc0").classList.remove("on"),null,16.98);
+tl.call(()=>$$("uc1").classList.add("on"),null,17.80);
+tl.call(()=>$$("uc1").classList.remove("on"),null,18.46);
+/* the drag */
+tl.fromTo("#thumb",{opacity:0,x:300,y:900},
+  {opacity:1,x:300,y:430,duration:0.14,ease:OUT4,...IR},20.08);
+tl.fromTo("#dots",{opacity:0},{opacity:1,duration:0.08,...IR},20.14);
+tl.to("#thumb",{x:150,y:250,duration:0.30,ease:"power2.inOut"},20.20);
+tl.to(["#dots","#thumb"],{opacity:0,duration:0.10},20.50);
+/* the climax's one moving beat, and the flood's type */
+for(let i=0;i<5;i++)
+  tl.fromTo("#uc"+i,{scale:0.5},
+    {scale:1,duration:0.18,ease:"back.out(3)",immediateRender:false},21.96+i*0.02);
+tl.call(()=>$$("uc0").classList.add("on"),null,22.02);
+tl.call(()=>$$("uc0").classList.remove("on"),null,22.36);
+tl.set("#fmark",{opacity:1},27.12);
+tl.set("#fword",{opacity:1},27.44);
+tl.set("#ff1",{opacity:1},27.92);
+tl.set("#ff2",{opacity:1},28.28);
+tl.set("#furl",{opacity:1},28.92);
+
+paint(0);
+window.__timelines=window.__timelines||{};
+window.__timelines["rmblr"]=tl;
+})();
+</script></body></html>

@@ -1,0 +1,413 @@
+#!/usr/bin/env python3
+"""RMBLR — flat cut. 30.0s · 1920x1080 · 60fps. (v4)
+
+Ayanda on v3: "I like the 3D-ness, but try the same thing with all the 3D
+removed. Flat flat version. But I like the phone. And it's still a bit still —
+you can do much, much better."
+
+THE RULE THAT REPLACES THE LIGHTING — **the orb is the only circle in a world of
+rectangles.** v3 made it the hero with speculars and bloom. Flat has none of
+that, so the hero-making moves to SHAPE: every panel, band, chip, phone, letter
+and bar in this film is a hard-edged rectangle, and the one round thing on screen
+is the product.
+
+WHAT FLAT BUYS BACK. A flat circle at 52px and at 416px are the same object
+scaled — so there is no hero/UI seam left to hide. ONE orb travels the entire
+film, swelling when the mechanic has to be legible and shrinking back onto the
+phone to do its job. v3 needed two orbs and a match-cut; this needs neither.
+
+AND THE MOTION. With no lighting or perspective to protect, the FRAME can
+reconfigure. The phone slides between three stations, colour fields wipe on the
+beat, the arc deals itself out as five full-width bands, the flick throws the orb
+across the frame. Nothing on screen holds longer than a bar, and every move lands
+on a 0.25s subdivision of the 120 BPM grid.
+
+  A 0.0- 2.0  TITLE     · five bars punch in and slam into the orb
+  B 2.0- 4.5  REVEAL    · the phone arrives, the orb takes its place
+  C 4.5- 8.0  TAP       · the orb swells, listens, and the sentence lands
+  D 8.0-12.0  HOLD      · the arc, dealt as five full-width bands
+  E 12.0-15.0 FLICK     · thrown across the frame, straight to the tone
+  F 15.0-19.0 APPS      · three phones, three different arcs
+  G 19.0-22.0 DRAG      · every place it could live, then the one you pick
+  H 22.0-26.0 TRANSLATE · the frame splits English | isiZulu
+  I 26.0-30.0 LOCKUP    · the circle opens back into the mark
+
+Exactly 30.000s so the approved score drops on unchanged.
+"""
+import os
+from apps import whatsapp, gmail, slack, keyboard, APPS_CSS
+from flat import FLAT_CSS
+
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
+W, H, FPS, DUR = 1920, 1080, 60, 30.0
+
+DEV_W, DEV_H, PAD = 415, 873, 11
+DEV_T = 103.5
+DEV_L, DEV_MID, DEV_R = 140.0, 752.5, 1365.0      # the three stations
+ORB_OX, ORB_OY = PAD + 300.0, PAD + 430.0          # the orb's spot on the screen
+OX, OY = DEV_L + ORB_OX, DEV_T + ORB_OY            # 451, 544.5 — its home in frame
+HERO = 8.0                                          # 52 -> 416px
+HX, HY = 600.0, 540.0
+
+BARS = [0.34, 0.66, 1.0, 0.72, 0.42]
+GAP = 100.0 / (5 * 2.2)
+BAR_X = [GAP * 0.6 + i * (GAP * 2) + GAP / 2 for i in range(5)]
+
+TONES = {"wa": ["CASUAL", "CLEAN UP", "GRAMMAR", "BULLETS", "SUMMARY"],
+         "gm": ["PROFESSIONAL", "SUMMARY", "CLEAN UP", "GRAMMAR", "BULLETS"],
+         "sl": ["CLEAN UP", "CASUAL", "BULLETS", "PROFESSIONAL", "SUMMARY"]}
+BAND_BG = ["#0A0B0D", "#7C6CFF", "#F2F4F8", "#2A2394", "#0A0B0D"]
+BAND_FG = ["#F2F4F8", "#0A0B0D", "#0A0B0D", "#F2F4F8", "#F2F4F8"]
+
+def wave_svg(eid, cls=""):
+    ls = "".join(f'<line class="wb" x1="{BAR_X[i]:.2f}" x2="{BAR_X[i]:.2f}" '
+                 f'y1="{50-BARS[i]*50:.2f}" y2="{50+BARS[i]*50:.2f}"/>' for i in range(5))
+    return (f'<svg id="{eid}" class="{cls}" viewBox="0 0 100 100" fill="none">'
+            f'<g stroke="currentColor" stroke-width="{GAP:.4f}" stroke-linecap="round">{ls}</g></svg>')
+
+def dev(eid, app_fn, key):
+    m = app_fn(1.0)
+    if key != "main":
+        for k in ("wa", "gm", "sl"):
+            m = m.replace(f'id="{k}-txt"', f'data-field="{k}"')
+    return (f'<div id="{eid}" class="dev"><div class="scr">{m}{keyboard(1.0)}</div></div>')
+
+PHASES = [
+    (0.00, 5.15, "idle"),
+    (5.15, 6.45, "recording"), (6.45, 7.00, "working"), (7.00, 7.45, "done"),
+    (7.45, 10.60, "idle"),
+    (10.60, 11.25, "recording"), (11.25, 11.60, "working"), (11.60, 12.00, "done"),
+    (12.00, 12.75, "idle"),
+    (12.75, 13.05, "recording"), (13.05, 13.35, "working"), (13.35, 13.70, "done"),
+    (13.70, 23.80, "idle"),
+    (23.80, 24.55, "recording"), (24.55, 24.95, "working"), (24.95, 25.40, "done"),
+    (25.40, 30.00, "idle"),
+]
+TRANSLATE_ON, TRANSLATE_OFF = 22.90, 24.95
+FIELDTEXT = [
+    (0.00,  "wa-txt", ""),
+    (7.00,  "wa-txt", "I'll be there at about half seven."),
+    (11.60, "wa-txt", "Yeah, half seven works — see you there."),
+    (13.35, "wa-txt", "half seven · bring the deck · ash drives"),
+    (19.00, "wa-txt", "Yeah, half seven works — see you there."),
+    (22.60, "wa-txt", "Thank you, I will see you tomorrow."),
+    (24.95, "wa-txt", "Ngiyabonga, ngizokubona kusasa."),
+]
+SLAM = [(4.50, 5.00, "TAP"), (8.00, 8.45, "HOLD"), (12.00, 12.40, "FLICK"),
+        (19.00, 19.40, "DRAG"), (22.00, 22.45, "DOUBLE TAP")]
+HEAD = [(2.40, 4.50, "IT SHOWS UP\nWHEN YOU TYPE."),
+        (7.15, 8.00, "IT LANDS WHERE\nYOUR CURSOR WAS."),
+        (10.55, 12.00, "SLIDE. RELEASE.\nSPEAK."),
+        (13.85, 15.00, "STRAIGHT TO\nTHE TONE."),
+        (15.45, 19.00, "THE TONES CHANGE\nWITH THE APP."),
+        (20.70, 22.00, "PUT IT WHERE\nYOU WANT IT."),
+        (25.55, 26.45, "SAY IT IN ENGLISH.\nSEND IT IN ISIZULU.")]
+SUB = [(3.35, 4.50, "It appears only while a field has the cursor.")]
+
+def js(rows):
+    """Serialise to JS. Real newlines in the copy must survive as \\n escapes —
+    a literal newline inside a JS string literal is a syntax error."""
+    def cell(c):
+        if isinstance(c, str):
+            return '"' + c.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+        return f"{c}"
+    return "[" + ",".join("[" + ",".join(cell(c) for c in r) + "]" for r in rows) + "]"
+
+bands = "".join(
+    f'<div class="band" id="bd{i}" style="top:{i*216}px;background:{BAND_BG[i]}">'
+    f'<b id="bdt{i}" data-layout-allow-overlap data-layout-allow-occlusion style="color:{BAND_FG[i]}"></b></div>' for i in range(5))
+streaks = "".join(f'<div class="streak" id="st{i}"></div>' for i in range(7))
+dots = "".join(f'<div class="dot" style="left:{40+c*74}px;top:{60+r*84}px"></div>'
+               for r in range(9) for c in range(5))
+
+HTML = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>RMBLR</title><style>
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-400-normal.woff2)format('woff2');font-weight:400;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-500-normal.woff2)format('woff2');font-weight:500;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-700-normal.woff2)format('woff2');font-weight:700;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-900-normal.woff2)format('woff2');font-weight:900;font-display:block}}
+@font-face{{font-family:NotoJP;src:url(assets/fonts/noto-sans-jp-japanese-500-normal.woff2)format('woff2');font-weight:500;font-display:block}}
+{FLAT_CSS}
+{APPS_CSS}
+#dev{{left:{DEV_L}px;top:{DEV_T}px}}
+#devB,#devC{{position:absolute;width:{DEV_W}px;height:{DEV_H}px;background:#000;
+  border:1px solid var(--line);border-radius:26px;padding:{PAD}px;top:{DEV_T}px;opacity:0}}
+#devB{{left:{DEV_MID}px}} #devC{{left:{DEV_R}px}}
+#orb{{left:{OX-26:.1f}px;top:{OY-26:.1f}px}}
+#meter{{left:{HX-95:.0f}px;top:{HY+270:.0f}px;height:190px}}
+#head{{left:1010px;top:392px;width:840px}}
+#sub{{left:1010px;top:592px;width:800px}}
+#slam{{top:436px}}
+#split{{position:absolute;inset:0;background:var(--indigo);opacity:0;transform-origin:100% 50%}}
+#zuluw{{overflow:hidden}}
+#splitlab{{position:absolute;right:96px;top:104px;color:#0A0B0D;font-size:64px;font-weight:900;
+  letter-spacing:-.02em;opacity:0}}
+#splitlab2{{position:absolute;left:620px;top:104px;color:var(--dim);font-size:64px;font-weight:900;
+  letter-spacing:-.02em;opacity:0}}
+#rule{{position:absolute;left:1010px;top:560px;width:640px;height:6px;background:var(--indigo);
+  transform-origin:0 50%}}
+#lockmark{{left:{960-330:.0f}px;top:{540-101:.0f}px;width:202px;height:202px;opacity:0}}
+#lockword{{left:{960-90:.0f}px;top:{540-66:.0f}px}}
+.fact{{left:0;width:1920px;text-align:center}}
+#url{{left:0;width:1920px;text-align:center;top:872px}}
+#trace{{position:absolute;height:6px;background:var(--indigo);transform-origin:0 50%;opacity:0}}
+</style></head><body>
+<div id="root" data-composition-id="rmblr" data-width="{W}" data-height="{H}"
+     data-fps="{FPS}" data-duration="{DUR}">
+  <div class="clip lay" id="film" data-start="0" data-duration="{DUR}" data-track-index="0">
+
+    <div class="field" id="f-indigo"></div>
+    <div class="field" id="f-paper" style="opacity:0"></div>
+
+    {dev("dev", whatsapp, "main")}
+    {dev("devB", gmail, "b")}
+    {dev("devC", slack, "c")}
+
+    <div id="dots">{dots}</div>
+    <div id="trace"></div>
+    {streaks}
+
+    <div id="orb"><div id="orbring"></div><div id="pulse"></div>{wave_svg("wave")}<div id="glyph">文A</div></div>
+    <div id="meter">{''.join(f'<div class="mbar" data-i="{i}"></div>' for i in range(5))}</div>
+
+    <div id="bands">{bands}</div>
+
+    <div id="split"></div>
+    <div id="splitlab">ISIZULU</div>
+    <div class="tw" id="zuluw" data-layout-allow-overlap data-layout-allow-occlusion style="position:absolute;left:1060px;top:470px;width:740px"><span id="zulu" data-layout-allow-overlap data-layout-allow-occlusion>Ngiyabonga,\nngizokubona\nkusasa.</span></div>
+    <div id="splitlab2">ENGLISH</div>
+
+    <div class="tw" id="head"><span></span></div>
+    <div class="tw" id="sub"><span></span></div>
+    <div id="rule"></div>
+    <div id="slam" data-layout-allow-overlap data-layout-allow-occlusion></div>
+
+    <div id="tonelist">{''.join(f'<div class="trow" id="tr{i}" data-layout-allow-overlap data-layout-allow-occlusion><span data-layout-allow-overlap data-layout-allow-occlusion></span></div>' for i in range(5))}</div>
+
+    <div class="chip" id="fired" style="left:640px;top:512px">BULLETS</div>
+
+    {wave_svg("lockmark")}
+    <div id="lockword">RMBLR</div>
+    <div class="fact" id="fact1" style="top:740px">Your own API key. No account. No subscription.</div>
+    <div class="fact" id="fact2" style="top:796px">A dictionary of your own words. Open source, MIT.</div>
+    <div id="url">github.com/Past-da-king/rmblr</div>
+
+  </div>
+</div>
+<script src="vendor/gsap.min.js"></script>
+<script>
+(function(){{
+const $$=s=>document.getElementById(s);
+const PHASES={js(PHASES)},FIELDTEXT={js(FIELDTEXT)},SLAM={js(SLAM)},HEAD={js(HEAD)},SUB={js(SUB)};
+const TONES={{wa:{TONES['wa']},gm:{TONES['gm']},sl:{TONES['sl']}}};
+const BARS={BARS};
+const COL={{idle:"#15171B",recording:"#E05561",working:"#7C6CFF",done:"#4FBF87"}};
+const orb=$$("orb"),orbring=$$("orbring"),wave=$$("wave"),glyph=$$("glyph"),
+      meter=[].slice.call(document.querySelectorAll(".mbar")),
+      wbars=[].slice.call(document.querySelectorAll("#wave .wb"));
+const pick=(r,t)=>{{let v=null;for(const x of r) if(t>=x[0]&&t<x[1]) v=x; return v;}};
+const last=(r,t)=>{{let v=null;for(const x of r) if(t>=x[0]) v=x; return v;}};
+const level=t=>Math.max(0,Math.min(1,0.52+0.46*(
+  0.60*Math.sin(2*Math.PI*3.10*t)+0.30*Math.sin(2*Math.PI*7.30*t+1.1)
+ +0.25*Math.sin(2*Math.PI*1.70*t+2.3))));
+
+function paint(t){{
+  const ph=(pick(PHASES,t)||[0,0,"idle"])[2];
+  const rec=ph==="recording", lv=rec?level(t):0;
+  orb.style.background=COL[ph];
+  orbring.style.opacity=rec?1:0;
+  orbring.style.transform="scale("+(1+lv*0.30).toFixed(4)+")";
+  for(let i=0;i<5;i++){{
+    const h=Math.min(BARS[i]*(1+lv*(i===2?0.15:0.30)),1.0);
+    wbars[i].setAttribute("y1",(50-h*50).toFixed(2));
+    wbars[i].setAttribute("y2",(50+h*50).toFixed(2));
+    meter[i].style.height=(h*190).toFixed(1)+"px";     /* flat bars, no glow */
+  }}
+  const g=(t>={TRANSLATE_ON}&&t<{TRANSLATE_OFF}&&ph==="idle");
+  glyph.style.opacity=g?1:0; wave.style.opacity=g?0:1;
+
+  ["wa-txt","gm-txt","sl-txt"].forEach(id=>{{
+    const e=last(FIELDTEXT.filter(r=>r[1]===id),t),el=$$(id); if(el) el.textContent=e?e[2]:"";
+  }});
+  document.querySelectorAll("#dev .caret").forEach(c=>
+    c.style.opacity=(t>2.1&&t<26.0&&Math.floor(t*2)%2===0)?1:0);
+
+  const s=pick(SLAM,t); $$("slam").textContent=s?s[2]:"";
+  const h=pick(HEAD,t); $$("head").firstElementChild.textContent=h?h[2]:"";
+  const b=pick(SUB,t);  $$("sub").firstElementChild.textContent=b?b[2]:"";
+  const set=t<15.0?TONES.wa:(t<16.35?TONES.wa:(t<17.65?TONES.gm:TONES.sl));
+  for(let i=0;i<5;i++) $$("bdt"+i).textContent=TONES.wa[i];
+  /* the three-app beat: whichever phone the frame is on owns the list */
+  const tset = t<16.32?TONES.wa : (t<17.62?TONES.gm : TONES.sl);
+  for(let i=0;i<5;i++) $$("tr"+i).firstElementChild.textContent=tset[i];
+}}
+
+const tl=gsap.timeline({{paused:true}}), IR={{immediateRender:false}};
+const OUT4="power4.out", INOUT="power3.inOut";
+gsap.set("#orb",{{transformOrigin:"50% 50%"}});
+gsap.set("#head span,#sub span,#zuluw span",{{yPercent:100}});
+gsap.set("#rule",{{scaleX:0}});
+gsap.set("#meter",{{transformOrigin:"50% 100%"}});
+tl.to({{p:0}},{{p:1,duration:{DUR},ease:"none",onUpdate:function(){{paint(this.targets()[0].p*{DUR});}}}},0);
+
+/* every reveal is a MASK, never a soft fade — flat design has no dissolve */
+function say(el,at,dur){{ tl.fromTo(el+" span",{{yPercent:100}},
+  {{yPercent:0,duration:dur||0.5,ease:OUT4,immediateRender:false}},at); }}
+function unsay(el,at){{ tl.to(el+" span",{{yPercent:-110,duration:0.35,ease:"power3.in"}},at); }}
+function slam(at){{ tl.fromTo("#slam",{{opacity:0,scaleX:1.25,scaleY:0.6}},
+  {{opacity:1,scaleX:1,scaleY:1,duration:0.26,ease:OUT4,immediateRender:false}},at); }}
+function unslam(at){{ tl.to("#slam",{{opacity:0,duration:0.14,ease:"none"}},at); }}
+function devTo(at,x,dur){{ tl.to("#dev",{{x:x,duration:dur||0.55,ease:OUT4}},at); }}
+function orbTo(at,dx,dy,sc,dur,ez){{ tl.to("#orb",{{x:dx,y:dy,scale:sc,duration:dur,ease:ez||OUT4}},at); }}
+
+/* ═ A · 0.0–2.0 — five bars punch in and slam into the orb ═ */
+gsap.set("#dev",{{y:1120}});
+gsap.set("#orb",{{x:{HX-OX:.1f},y:{HY-OY:.1f},scale:{HERO}}});
+gsap.set("#f-indigo",{{transformOrigin:"50% 0%"}});
+tl.fromTo("#orb",{{opacity:0}},{{opacity:0,duration:0.01,...IR}},0);
+for(let i=0;i<5;i++){{
+  tl.fromTo("#meter .mbar:nth-child("+(i+1)+")",{{scaleY:0}},
+    {{scaleY:1,duration:0.30,ease:OUT4,immediateRender:false}},0.15+i*0.11);
+}}
+tl.fromTo("#meter",{{opacity:0,x:0,y:-320,scale:1.7}},
+  {{opacity:1,x:0,y:-320,scale:1.7,duration:0.01,...IR}},0.10);
+tl.to("#meter",{{scale:0.4,duration:0.34,ease:"power3.in"}},1.05);
+tl.to("#meter",{{opacity:0,duration:0.12}},1.30);
+tl.fromTo("#orb",{{opacity:0,scale:0.2}},{{opacity:1,scale:{HERO},duration:0.34,ease:OUT4,...IR}},1.20);
+tl.fromTo("#orb",{{background:"#F2F4F8"}},{{background:"#F2F4F8",duration:0.01,...IR}},1.20);
+/* the indigo ground wipes up and the orb rides down onto the phone */
+tl.to("#f-indigo",{{scaleY:0,duration:0.42,ease:INOUT}},1.58);
+orbTo(1.62,0,0,1,0.62,INOUT);
+
+/* ═ B · 2.0–4.5 — the phone arrives ═ */
+tl.to("#dev",{{y:0,duration:0.55,ease:OUT4}},1.80);
+tl.fromTo("#pulse",{{opacity:1,scale:1}},{{opacity:0,scale:3.2,duration:0.55,ease:OUT4,...IR}},2.22);
+say("#head",2.40); say("#sub",3.35,0.45);
+tl.to("#rule",{{scaleX:1,duration:0.5,ease:OUT4}},2.75);
+
+/* ═ C · 4.5–8.0 — TAP ═ */
+slam(4.50); unslam(5.00);
+unsay("#head",4.42); unsay("#sub",4.42);
+tl.to("#rule",{{scaleX:0,duration:0.25,ease:"power3.in"}},4.42);
+devTo(5.00,{DEV_R-DEV_L:.1f},0.55);
+orbTo(5.02,{HX-OX:.1f},{HY-OY:.1f},{HERO},0.48);
+tl.fromTo("#meter",{{opacity:0,scale:1,x:0,y:0}},{{opacity:1,duration:0.18,...IR}},5.18);
+tl.to("#meter",{{opacity:0,duration:0.18}},6.42);
+tl.fromTo("#rule",{{scaleX:0,x:-410,y:100}},{{scaleX:1,duration:0.52,ease:"none",...IR}},6.46);
+tl.to("#rule",{{opacity:0,duration:0.12}},7.00);
+devTo(7.00,0,0.5);
+orbTo(7.00,0,0,1,0.44);
+tl.set("#rule",{{opacity:1,x:0,y:0,scaleX:0}},7.10);
+say("#head",7.15);
+
+/* ═ D · 8.0–12.0 — the arc, dealt as five bands ═ */
+unsay("#head",7.94); slam(8.00); unslam(8.45);
+tl.fromTo("#bands",{{opacity:0}},{{opacity:1,duration:0.01,...IR}},8.40);
+for(let i=0;i<5;i++)
+  tl.fromTo("#bd"+i,{{x:(i%2?1920:-1920)}},{{x:0,duration:0.46,ease:OUT4,immediateRender:false}},8.42+i*0.09);
+orbTo(8.44,{170-OX:.1f},{540-OY:.1f},2.6,0.5);
+/* four bands are thrown out; the one under your thumb takes the frame */
+for(let i=0;i<5;i++) if(i!==0)
+  tl.to("#bd"+i,{{x:(i%2?1920:-1920),duration:0.38,ease:"power3.in"}},9.62+i*0.05);
+tl.to("#bd0",{{y:432,duration:0.42,ease:OUT4}},9.80);
+tl.to("#bd0",{{backgroundColor:"#7C6CFF",duration:0.18}},9.80);
+tl.to("#bdt0",{{color:"#0A0B0D",duration:0.18}},9.80);
+tl.to("#bd0",{{scaleX:0.001,duration:0.28,ease:"power3.in"}},10.24);
+say("#head",10.58);
+tl.to("#bands",{{opacity:0,duration:0.20,ease:"none"}},10.52);
+devTo(10.28,0,0.5);
+orbTo(10.30,0,0,1,0.44);
+tl.to("#dev",{{y:0,duration:0.4,ease:OUT4}},10.30);
+tl.fromTo("#meter",{{opacity:0,x:-360,y:-120,scale:0.55}},{{opacity:1,duration:0.14,...IR}},10.62);
+tl.to("#meter",{{opacity:0,duration:0.14}},11.22);
+
+/* ═ E · 12.0–15.0 — FLICK ═ */
+unsay("#head",11.94); slam(12.00); unslam(12.40);
+orbTo(12.38,{1700-OX:.1f},{540-OY:.1f},2.0,0.01,"none");
+for(let i=0;i<7;i++){{
+  tl.fromTo("#st"+i,{{opacity:0,x:1700-i*30,y:{540-OY-26:.1f},width:60}},
+    {{opacity:1,duration:0.06,immediateRender:false}},12.42+i*0.022);
+  tl.to("#st"+i,{{x:300+i*90,width:200-i*20,opacity:0,duration:0.42,ease:"power3.in"}},12.44+i*0.022);
+}}
+orbTo(12.44,{300-OX:.1f},{540-OY:.1f},2.0,0.34,"power3.in");
+tl.fromTo("#fired",{{opacity:0,scale:0.6}},{{opacity:1,scale:1,duration:0.16,ease:OUT4,...IR}},12.74);
+tl.to("#fired",{{opacity:0,duration:0.16}},13.04);
+tl.call(()=>$$("fired").classList.add("on"),null,12.74);
+devTo(13.00,0,0.44);
+orbTo(12.92,0,0,1,0.4);
+say("#head",13.85);
+
+/* ═ F · 15.0–19.0 — three phones, three arcs ═ */
+unsay("#head",14.94);
+/* each app slides through the same station in turn — a flat card shuffle */
+tl.to("#orb",{{opacity:0,duration:0.18}},15.00);
+say("#head",15.10);
+tl.to("#dev",{{x:-900,duration:0.5,ease:"power3.in"}},16.30);
+tl.fromTo("#devB",{{opacity:1,x:287.5}},{{opacity:1,x:-612.5,duration:0.55,ease:OUT4,...IR}},16.30);
+tl.to("#devB",{{x:-1512.5,duration:0.5,ease:"power3.in"}},17.60);
+tl.fromTo("#devC",{{opacity:1,x:-325}},{{opacity:1,x:-1225,duration:0.55,ease:OUT4,...IR}},17.60);
+tl.to("#devC",{{x:-2125,duration:0.5,ease:"power3.in"}},18.94);
+gsap.set("#tonelist span",{{yPercent:110}});
+[0,1,2].forEach(d=>{{
+  const at=[15.35,16.42,17.72][d];
+  for(let i=0;i<5;i++){{
+    tl.fromTo("#tr"+i+" span",{{yPercent:110}},
+      {{yPercent:0,duration:0.30,ease:OUT4,immediateRender:false}},at+i*0.055);
+    tl.to("#tr"+i+" span",{{yPercent:-110,duration:0.22,ease:"power3.in"}},at+0.86+i*0.03);
+  }}
+}});
+
+/* ═ G · 19.0–22.0 — DRAG ═ */
+unsay("#head",18.92);
+tl.to(["#devB","#devC"],{{opacity:0,x:900,duration:0.42,ease:"power3.in"}},18.96);
+tl.fromTo("#dev",{{x:900}},{{x:0,scale:1,duration:0.55,ease:OUT4,...IR}},19.00);
+tl.to("#orb",{{opacity:1,duration:0.2}},19.30);
+tl.set("#orb",{{x:0,y:0,scale:1,opacity:1}},19.02);
+slam(19.00); unslam(19.40);
+tl.fromTo("#dots",{{opacity:0,x:{DEV_L+PAD:.1f},y:{DEV_T+PAD:.1f}}},
+  {{opacity:1,duration:0.22,...IR}},19.44);
+tl.fromTo("#trace",{{opacity:0,scaleX:0,x:{OX:.1f},y:{OY:.1f},width:300,rotation:-38}},
+  {{opacity:1,scaleX:1,duration:0.55,ease:INOUT,...IR}},19.76);
+tl.to("#orb",{{x:-236,y:-186,duration:0.55,ease:INOUT}},19.76);
+tl.to(["#dots","#trace"],{{opacity:0,duration:0.24}},20.42);
+tl.fromTo("#pulse",{{opacity:1,scale:1}},{{opacity:0,scale:3.0,duration:0.45,ease:OUT4,...IR}},20.38);
+say("#head",20.70);
+
+/* ═ H · 22.0–26.0 — the frame splits ═ */
+unsay("#head",21.92); slam(22.00); unslam(22.45);
+tl.fromTo("#split",{{opacity:1,scaleX:0}},{{opacity:1,scaleX:0.5,duration:0.5,ease:OUT4,...IR}},22.40);
+tl.fromTo("#splitlab",{{opacity:0,y:-30}},{{opacity:1,y:0,duration:0.36,ease:OUT4,...IR}},22.70);
+tl.fromTo("#splitlab2",{{opacity:0,y:-30}},{{opacity:1,y:0,duration:0.36,ease:OUT4,...IR}},22.62);
+tl.to("#dev",{{x:0,duration:0.4,ease:OUT4}},22.50);
+
+tl.fromTo("#meter",{{opacity:0,x:-40,y:-120,scale:0.5}},{{opacity:1,duration:0.14,...IR}},23.82);
+tl.to("#meter",{{opacity:0,duration:0.14}},24.52);
+/* the divider sweeps the whole frame as the language lands */
+say("#zuluw",24.96,0.5);
+tl.to("#split",{{scaleX:1,duration:0.42,ease:INOUT}},25.34);
+tl.to("#zuluw span",{{yPercent:-110,duration:0.3,ease:"power3.in"}},25.30);
+tl.to("#split",{{opacity:0,duration:0.3}},25.72);
+tl.to(["#splitlab","#splitlab2"],{{opacity:0,duration:0.24}},25.34);
+say("#head",25.58);
+
+/* ═ I · 26.0–30.0 — the circle opens back into the mark ═ */
+unsay("#head",26.36);
+tl.to("#dev",{{y:1120,duration:0.66,ease:"power3.in"}},26.10);
+tl.to("#orb",{{x:{960-OX:.1f},y:{540-OY:.1f},scale:3.9,duration:0.62,ease:INOUT}},26.42);
+tl.to("#orb",{{opacity:0,duration:0.18}},27.06);
+tl.fromTo("#lockmark",{{opacity:0,scaleX:0.2,scaleY:0.2}},
+  {{opacity:1,scaleX:1,scaleY:1,duration:0.46,ease:OUT4,...IR}},27.00);
+tl.to("#lockmark",{{x:-40,duration:0.42,ease:OUT4}},27.44);
+tl.fromTo("#lockword",{{opacity:0,x:-60}},{{opacity:1,x:0,duration:0.5,ease:OUT4,...IR}},27.62);
+tl.fromTo("#fact1",{{opacity:0,y:22}},{{opacity:1,y:0,duration:0.36,ease:OUT4,...IR}},28.18);
+tl.fromTo("#fact2",{{opacity:0,y:22}},{{opacity:1,y:0,duration:0.36,ease:OUT4,...IR}},28.54);
+tl.fromTo("#url",{{opacity:0,y:18}},{{opacity:1,y:0,duration:0.36,ease:OUT4,...IR}},29.05);
+
+paint(0);
+window.__timelines=window.__timelines||{{}};
+window.__timelines["rmblr"]=tl;
+}})();
+</script></body></html>
+"""
+open(OUT, "w", encoding="utf-8").write(HTML)
+print(f"wrote index.html ({len(HTML)} bytes)  orb home ({OX},{OY})  hero x{HERO}")

@@ -1,0 +1,650 @@
+#!/usr/bin/env python3
+"""RMBLR — "One thumb, four verbs." 30.0s · 1920x1080 · 60fps.
+
+RMBLR's first launch film. The product's real subject is a GESTURE, not a screen,
+so this is a gesture vocabulary demonstrated rather than a feature montage.
+
+THE ANCHOR CONTRACT, which is the whole film:
+  The orb's centre sits at frame pixel (1000, 540) at a fixed size for all thirty
+  seconds. It never drifts, breathes, slides, scales or gets chased, and there is
+  NO camera move anywhere in this film. Everything else — the app behind it, the
+  thumb, the arc, the text, the language — changes around it. The stillness of the
+  orb IS the claim: everything changes, this stays. It is also the strongest
+  available answer to "follow the thumb": the camera is parked ON the orb
+  permanently, so every touch arrives into a locked frame.
+
+  This is why the film is ONE monolithic composition and not six parallel frame
+  workers — six workers would each draw their own orb and the six would not agree
+  to the pixel, which is the one thing this film cannot survive.
+
+  F1  0.00- 4.00  it appears because you typed
+  F2  4.00- 9.00  TAP        — dictate, straight into the field
+  F3  9.00-15.00  HOLD       — the arc of tones fans out
+  F4 15.00-21.00  FLICK      — skip the menu; then the app changes and so does the arc
+  F5 21.00-26.00  DOUBLE TAP — say it in English, send it in isiZulu
+  F6 26.00-30.00  the lockup and the honest terms
+
+Cut on a 120 BPM grid: beat 0.5s, bar 2.0s. Every cut lands on a beat, so a
+licensed record drops straight in with no re-edit.
+
+Every RMBLR pixel is derived from the app's own source — orb/OrbUi.kt for the orb,
+the wave mark, the fan geometry and the chips, ui/theme/Color.kt for the palette.
+Nothing here is eyeballed: chip positions come from fan_angle() exactly as the app
+computes them, and dp() is the app's own unit.
+"""
+import math, os
+
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
+
+# ── the unit ────────────────────────────────────────────────────────────────
+DP = 2.1
+def dp(v): return v * DP
+
+W, H, FPS, DUR = 1920, 1080, 60, 30.0
+
+# ── the stage, derived once ────────────────────────────────────────────────
+SCREEN_X = 260.0
+SCREEN_W = dp(393)                 # 825.3 — a real device viewport is 393dp wide
+ORB_CX, ORB_CY = 1000.0, 540.0     # ⭐ THE PIN. Never changes.
+ORB = dp(52)                       # ORB_SIZE = 52dp
+ORB_BODY = dp(52 * 0.84)           # the body circle is 0.84x
+ORB_GLYPH = dp(52 * 0.46)          # the wave mark is 0.46x
+FAN_R = dp(116)                    # OrbFan radius
+CHIP_W, CHIP_H = dp(128), dp(34)
+CHIP_R = dp(17)
+CHIP_FS = dp(12)
+
+CLAIM_X = 1180.0                   # the claim column, type only — never a card
+
+# The composer sits where a composer sits when the keyboard is up, and the orb is
+# parked just to its right with a realistic 14dp of margin.
+COMP_X, COMP_W, COMP_H = 290.0, 625.0, 96.0
+COMP_Y = ORB_CY - COMP_H / 2       # 492 — centred on the orb's own centre line
+
+def fan_angle(index, count, open_right=False):
+    """Where item `index` sits on the arc, in degrees — OrbUi.fanAngleDegrees().
+
+    0 points right and grows clockwise to match screen coordinates, and the fan
+    always points away from the edge the orb is parked on. Ours opens LEFT.
+    """
+    spread = 150.0
+    step = 0.0 if count <= 1 else spread / (count - 1)
+    offset = -spread / 2.0 + step * index
+    return offset if open_right else 180.0 - offset
+
+def chip_pos(index, count=5):
+    """The chip's top-left in frame pixels. Centred on the arc point, as the app does."""
+    a = math.radians(fan_angle(index, count))
+    x = ORB_CX + FAN_R * math.cos(a) - CHIP_W / 2
+    y = ORB_CY + FAN_R * math.sin(a) - CHIP_H / 2
+    return x, y
+
+CHIPS = [chip_pos(i) for i in range(5)]
+
+# The shipped tone chips, in arc order (docs/screenshot-arc.png), and what the
+# same arc offers once the app behind it is a mail app instead of a chat app.
+TONES_CHAT = ["Professional", "Clean up", "Casual", "Bullets", "Summary"]
+TONES_MAIL = ["Professional", "Summary", "Clean up", "Grammar", "Bullets"]
+
+# ── the wave mark ───────────────────────────────────────────────────────────
+# NOT a microphone. Five bars rising to the middle — the same shape as the
+# launcher icon. On a 100x100 grid: gap = 100/(5*2.2), barWidth = gap,
+# x_i = gap*0.6 + i*(barWidth+gap), then +barWidth/2 for the stroke centre.
+BARS = [0.34, 0.66, 1.0, 0.72, 0.42]
+GAP = 100.0 / (5 * 2.2)
+BAR_X = [GAP * 0.6 + i * (GAP * 2) + GAP / 2 for i in range(5)]
+
+def wave_svg(cls, extra=""):
+    lines = "".join(
+        f'<line class="wb" data-i="{i}" x1="{BAR_X[i]:.2f}" x2="{BAR_X[i]:.2f}" '
+        f'y1="{50 - BARS[i] * 50:.2f}" y2="{50 + BARS[i] * 50:.2f}"/>'
+        for i in range(5))
+    return (f'<svg class="{cls}" viewBox="0 0 100 100" fill="none" {extra}>'
+            f'<g stroke="currentColor" stroke-width="{GAP:.4f}" stroke-linecap="round">'
+            f'{lines}</g></svg>')
+
+# ── the app behind the orb ─────────────────────────────────────────────────
+# Deliberately a neutral chat surface and a neutral mail surface. Naming a
+# trademark while drawing a lookalike is worse than not naming it, and the app's
+# own vocabulary for these is its profile names: Chat and Email.
+BUBBLES = [
+    (0, 300.0, 150.0, 330.0, "still on for tonight?"),
+    (0, 300.0, 232.0, 250.0, "what time?"),
+    (1, 300.0, 330.0, 290.0, "half seven I think"),
+]
+def bubbles_html():
+    out = []
+    for mine, _x, y, w, txt in BUBBLES:
+        side = "me" if mine else "them"
+        # inside #screen, so these are screen-local coordinates, not frame ones
+        left = (SCREEN_W - 30 - w) if mine else 30.0
+        out.append(f'<div class="bub {side}" data-layout-allow-occlusion data-layout-allow-overlap '
+                   f'style="left:{left:.1f}px;top:{y:.1f}px;'
+                   f'width:{w:.1f}px">{txt}</div>')
+    return "".join(out)
+
+MAIL_ROWS = [("To", "ash@—"), ("Subject", "tonight")]
+def mail_html():
+    out = []
+    for i, (k, v) in enumerate(MAIL_ROWS):
+        y = 250.0 + i * 84.0
+        out.append(f'<div class="mrow" style="top:{y:.1f}px">'
+                   f'<span class="mk">{k}</span><span class="mv">{v}</span></div>')
+    return "".join(out)
+
+CHIPS_HTML = "".join(
+    f'<div class="chip" id="chip{i}" style="left:{x:.1f}px;top:{y:.1f}px">'
+    f'<span id="chiptx{i}"></span></div>'
+    for i, (x, y) in enumerate(CHIPS))
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  THE PAINT SCRIPT — everything discrete, resolved from t
+# ═══════════════════════════════════════════════════════════════════════════
+# Anything that is a *state* rather than a *motion* is resolved every frame from
+# the timeline's own time by paint(t), so a seek can never land on stale text or
+# a stale orb colour. Continuous motion (chips springing, the thumb travelling,
+# the scrim washing) is left to ordinary tweens. The two sets are disjoint on
+# purpose: paint() owns colour, glyph and text; tweens own position and opacity.
+
+# orb phase windows — [start, end, phase]
+PHASES = [
+    (0.00,  2.00, "gone"),
+    (2.00,  5.00, "idle"),
+    (5.00,  7.60, "recording"),
+    (7.60,  8.20, "working"),
+    (8.20,  8.70, "done"),
+    (8.70, 13.20, "idle"),
+    (13.20, 14.10, "recording"),
+    (14.10, 14.60, "working"),
+    (14.60, 15.00, "done"),
+    (15.00, 15.35, "idle"),
+    (15.35, 16.60, "recording"),
+    (16.60, 17.10, "working"),
+    (17.10, 21.00, "idle"),
+    (21.00, 22.80, "idle"),
+    (22.80, 24.20, "recording"),
+    (24.20, 25.20, "working"),
+    (25.20, 25.70, "done"),
+    (25.70, 30.00, "idle"),
+]
+# when the orb wears the 文A translate glyph instead of the wave mark
+TRANSLATE_FROM = 22.00
+
+# composer text — [start, end, text, mode] ; mode "type" reveals char by char,
+# "set" lands whole. The transcript ACCUMULATES while it is still listening,
+# because that is the real streaming behaviour.
+COMPOSER = [
+    (0.00,  0.00, "",                                              "set"),
+    (5.60,  7.60, "so um i'll be there at about half seven",       "type"),
+    (8.20,  8.20, "I'll be there at about half seven.",            "set"),
+    (9.00,  9.00, "I'll be there at about half seven.",            "set"),
+    (13.30, 14.10, "yeah half seven works see you there",          "type"),
+    (14.60, 14.60, "Yeah, half seven works — see you there.",      "set"),
+    (15.35, 16.60, "half seven · bring the deck · ash drives",     "type"),
+    (17.10, 17.10, "BULLETS",                                      "bullets"),
+    (21.00, 21.00, "",                                             "set"),
+    (22.90, 24.20, "thank you i will see you tomorrow",            "type"),
+    (25.20, 25.20, "Ngiyabonga, ngizokubona kusasa.",              "set"),
+]
+BULLET_LINES = ["Half seven at the venue", "Bring the deck", "Ash is driving"]
+
+# the claim column — [start, end, big, small]
+CLAIMS = [
+    (2.00,  3.00, "It shows up when you type.", ""),
+    (3.00,  4.00, "It shows up when you type.", "Nowhere else."),
+    (5.00,  6.20, "TAP", ""),
+    (6.20,  9.00, "TAP", "Straight into the field you were typing in."),
+    (9.80, 11.00, "HOLD", ""),
+    (11.00, 15.00, "HOLD", "Slide to a tone. Release. Speak."),
+    (15.30, 16.40, "FLICK", ""),
+    (16.40, 18.40, "FLICK", "Skip the menu."),
+    (19.60, 21.00, "", "The tones change with the app you are in."),
+    (21.90, 23.20, "DOUBLE TAP", ""),
+    (23.20, 26.00, "DOUBLE TAP", "Say it in English. Send it in isiZulu."),
+]
+APP_LABEL = [(0.0, 17.4, "Chat"), (18.0, 21.0, "Email"), (21.0, 26.0, "Chat")]
+
+def js_arr(rows):
+    return "[" + ",".join("[" + ",".join(
+        (f'"{c}"' if isinstance(c, str) else f"{c}") for c in r) + "]" for r in rows) + "]"
+
+# ═══════════════════════════════════════════════════════════════════════════
+HTML = f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RMBLR — One thumb, four verbs</title>
+<style>
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-400-normal.woff2)format('woff2');font-weight:400;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-500-normal.woff2)format('woff2');font-weight:500;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-700-normal.woff2)format('woff2');font-weight:700;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-900-normal.woff2)format('woff2');font-weight:900;font-display:block}}
+@font-face{{font-family:NotoJP;src:url(assets/fonts/noto-sans-jp-japanese-500-normal.woff2)format('woff2');font-weight:500;font-display:block}}
+
+:root{{
+  --bg:#0A0B0D; --surface:#15171B; --raised:#1E2127; --line:#2B2F37;
+  --text:#EDEFF3; --text-muted:#9AA1AD; --text-light:#666D7A;
+  --accent:#7C6CFF; --accent-wash:#23204A; --alert:#E05561; --good:#4FBF87;
+  --on-accent:#FFFFFF; --scrim:#07080A;
+}}
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#000}}
+#root{{position:relative;width:{W}px;height:{H}px;overflow:hidden;background:var(--bg);
+  font-family:Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased}}
+.lay{{position:absolute;inset:0}}
+#world{{position:absolute;inset:0}}   /* everything the arc floats above */
+
+/* the one decorative thing in the film, and it never moves either */
+#bloom{{position:absolute;left:{ORB_CX-620:.0f}px;top:{ORB_CY-620:.0f}px;width:1240px;height:1240px;
+  background:radial-gradient(circle,rgba(124,108,255,.12) 0%,rgba(124,108,255,.045) 38%,transparent 68%)}}
+
+/* ── the phone screen: 393dp wide, bleeding off the top and bottom edges ── */
+#screen{{position:absolute;left:{SCREEN_X:.1f}px;top:0;width:{SCREEN_W:.1f}px;height:{H}px;
+  overflow:hidden;background:var(--bg);
+  border-left:1px solid var(--line);border-right:1px solid var(--line)}}
+#applabel{{position:absolute;left:{SCREEN_X+30:.0f}px;top:60px;padding:9px 20px;border-radius:100px;
+  background:var(--raised);color:var(--text-muted);font-size:23px;font-weight:500;letter-spacing:.01em}}
+
+.bub{{position:absolute;padding:20px 26px;border-radius:26px;font-size:27px;line-height:1.35;
+  color:var(--text)}}
+.bub.them{{background:var(--surface);border-bottom-left-radius:8px}}
+.bub.me{{background:var(--accent-wash);border-bottom-right-radius:8px;text-align:right}}
+#chat{{position:absolute;inset:0}}
+#mail{{position:absolute;inset:0;opacity:0}}
+.mrow{{position:absolute;left:30px;width:{SCREEN_W-60:.0f}px;height:70px;
+  border-bottom:1px solid var(--line);display:flex;align-items:center;gap:18px}}
+.mk{{color:var(--text-light);font-size:25px;width:120px}}
+.mv{{color:var(--text);font-size:27px}}
+
+/* the composer — the text field the orb answers to */
+#composer{{position:absolute;left:{COMP_X:.0f}px;top:{COMP_Y:.0f}px;width:{COMP_W:.0f}px;height:{COMP_H:.0f}px;
+  border-radius:{COMP_H/2:.0f}px;background:var(--surface);border:1.5px solid var(--line);
+  display:flex;align-items:center;padding:0 34px;overflow:hidden}}
+#ctext{{color:var(--text);font-size:28px;line-height:1.25;white-space:pre-wrap;max-height:80px;overflow:hidden}}
+#caret{{display:inline-block;width:3px;height:34px;background:var(--accent);
+  margin-left:2px;vertical-align:middle;opacity:0}}
+#clang{{position:absolute;left:{COMP_X:.0f}px;top:{COMP_Y+COMP_H+18:.0f}px;color:var(--text-light);
+  font-size:22px;opacity:0}}
+/* the bullets the flick produces — a taller field, so it gets its own box */
+#bullets{{position:absolute;left:{COMP_X:.0f}px;top:{COMP_Y-58:.0f}px;width:{COMP_W:.0f}px;
+  border-radius:34px;background:var(--surface);border:1.5px solid var(--line);
+  padding:26px 34px;opacity:0}}
+#bullets div{{color:var(--text);font-size:27px;line-height:1.55;opacity:0}}
+
+/* ── the arc ── */
+/* the arc's wash. It covers the screen, as the app's does — not the claim column. */
+#scrim{{position:absolute;left:{SCREEN_X:.1f}px;top:0;width:{SCREEN_W:.1f}px;height:{H}px;
+  background:var(--scrim);opacity:0}}
+.chip{{position:absolute;width:{CHIP_W:.1f}px;height:{CHIP_H:.1f}px;border-radius:{CHIP_R:.1f}px;
+  background:var(--surface);color:var(--text-muted);font-size:{CHIP_FS:.1f}px;font-weight:400;
+  display:flex;align-items:center;justify-content:center;white-space:nowrap;opacity:0}}
+.chip.on{{background:var(--accent);color:var(--on-accent);font-weight:600}}
+#tonetag{{position:absolute;left:{ORB_CX-FAN_R*0.55:.0f}px;top:{ORB_CY+ORB/2+16:.0f}px;
+  color:var(--accent);font-size:24px;font-weight:600;opacity:0}}
+
+/* ── THE ORB. Pinned at ({ORB_CX:.0f}, {ORB_CY:.0f}). Never transformed. ── */
+#orb{{position:absolute;left:{ORB_CX-ORB/2:.2f}px;top:{ORB_CY-ORB/2:.2f}px;
+  width:{ORB:.2f}px;height:{ORB:.2f}px;display:grid;place-items:center;opacity:0}}
+#halo{{position:absolute;left:0;top:0;width:{ORB:.2f}px;height:{ORB:.2f}px;border-radius:50%;
+  background:rgba(224,85,97,.22);opacity:0}}
+#body{{position:relative;width:{ORB_BODY:.2f}px;height:{ORB_BODY:.2f}px;border-radius:50%;
+  background:var(--surface);display:grid;place-items:center}}
+#wave{{width:{ORB_GLYPH:.2f}px;height:{ORB_GLYPH:.2f}px;color:var(--text);display:block}}
+.wb{{transform-box:fill-box;transform-origin:center}}
+#tglyph{{position:absolute;font-family:NotoJP,Roboto,sans-serif;font-size:{ORB_GLYPH*0.78:.1f}px;
+  font-weight:500;color:var(--text);opacity:0;letter-spacing:-.04em;line-height:1}}
+#ring{{position:absolute;width:{ORB_GLYPH:.2f}px;height:{ORB_GLYPH:.2f}px;opacity:0}}
+
+/* the thumb — a fingertip's footprint, not a cursor and not a drawn hand */
+#thumb{{position:absolute;left:0;top:0;width:{dp(60):.1f}px;height:{dp(60):.1f}px;border-radius:50%;
+  background:rgba(237,239,243,.10);border:2px solid rgba(237,239,243,.46);opacity:0;
+  margin-left:{-dp(30):.1f}px;margin-top:{-dp(30):.1f}px}}
+
+/* ── the claim column — type only ── */
+#claim{{position:absolute;left:{CLAIM_X:.0f}px;top:392px;width:640px}}
+#big{{color:var(--text);font-size:64px;font-weight:700;letter-spacing:-.022em;line-height:1.1;
+  min-height:72px}}
+#big.gest{{font-size:74px;font-weight:900;letter-spacing:.02em}}
+#small{{color:var(--text-muted);font-size:30px;font-weight:400;line-height:1.45;margin-top:22px;
+  width:600px}}
+
+/* ── the lockup ── */
+#lockmark{{position:absolute;left:{ORB_CX-ORB_GLYPH/2:.2f}px;top:{ORB_CY-ORB_GLYPH/2:.2f}px;
+  width:{ORB_GLYPH:.2f}px;height:{ORB_GLYPH:.2f}px;color:var(--text);opacity:0}}
+#lockword{{position:absolute;left:{ORB_CX+92:.0f}px;top:{ORB_CY-46:.0f}px;color:var(--text);
+  font-size:92px;font-weight:900;letter-spacing:-.03em;line-height:1;opacity:0}}
+.fact{{position:absolute;width:1400px;text-align:center;left:470px;color:var(--text-muted);
+  font-size:31px;font-weight:400;opacity:0}}
+#url{{position:absolute;width:1400px;text-align:center;left:470px;top:806px;color:var(--accent);
+  font-size:29px;font-weight:500;letter-spacing:.01em;opacity:0}}
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="rmblr" data-width="{W}" data-height="{H}"
+     data-fps="{FPS}" data-duration="{DUR}">
+  <div class="clip lay" id="film" data-start="0" data-duration="{DUR}" data-track-index="0">
+
+    <div id="bloom"></div>
+
+    <div id="world">
+      <div id="screen">
+        <div id="chat">{bubbles_html()}</div>
+        <div id="mail">{mail_html()}</div>
+      </div>
+      <div id="applabel">Chat</div>
+      <div id="bullets"><div>{BULLET_LINES[0]}</div><div>{BULLET_LINES[1]}</div><div>{BULLET_LINES[2]}</div></div>
+      <div id="composer" data-layout-allow-occlusion><div id="ctext"></div><span id="caret"></span></div>
+      <div id="clang">isiZulu</div>
+    </div>
+
+    <div id="scrim"></div>
+    {CHIPS_HTML}
+    <div id="tonetag">Casual</div>
+
+    <div id="orb">
+      <div id="halo"></div>
+      <div id="body">
+        {wave_svg("", 'id="wave"')}
+        <div id="tglyph">文A</div>
+        <svg id="ring" viewBox="0 0 100 100" fill="none">
+          <circle id="ringarc" cx="50" cy="50" r="42" stroke="#FFFFFF"
+                  stroke-width="{3/(52*0.46)*100:.2f}" stroke-linecap="round"
+                  transform="rotate(-90 50 50)"/>
+        </svg>
+      </div>
+    </div>
+
+    <div id="thumb"></div>
+
+    <div id="claim"><div id="big"></div><div id="small"></div></div>
+
+    {wave_svg("", 'id="lockmark"')}
+    <div id="lockword">RMBLR</div>
+    <div class="fact" id="fact1" style="top:688px">Your own API key. No account. No subscription.</div>
+    <div class="fact" id="fact2" style="top:742px">A dictionary of your own words. Open source, MIT.</div>
+    <div id="url">github.com/Past-da-king/rmblr</div>
+
+  </div>
+</div>
+
+<script src="vendor/gsap.min.js"></script>
+<script>
+(function(){{
+const $ = function(s){{ return document.querySelector(s); }};
+
+/* ── the paint script: everything DISCRETE, resolved from t ───────────────
+   A seek can land anywhere, so state is never left behind by a finished tween —
+   it is recomputed from the timeline's own time, every frame. */
+const PHASES   = {js_arr(PHASES)};
+const COMPOSER = {js_arr(COMPOSER)};
+const CLAIMS   = {js_arr(CLAIMS)};
+const APPLABEL = {js_arr(APP_LABEL)};
+const TRANSLATE_FROM = {TRANSLATE_FROM};
+const BARS   = {BARS};
+const BAR_X  = {[round(x,2) for x in BAR_X]};
+const TONES_CHAT = {TONES_CHAT};
+const TONES_MAIL = {TONES_MAIL};
+
+const COL = {{ idle:"#15171B", recording:"#E05561", working:"#7C6CFF", done:"#4FBF87", gone:"#15171B" }};
+
+const orb=$("#orb"), body=$("#body"), halo=$("#halo"), wave=$("#wave"),
+      tglyph=$("#tglyph"), ring=$("#ring"), ringarc=$("#ringarc"),
+      ctext=$("#ctext"), caret=$("#caret"), big=$("#big"), small=$("#small"),
+      applabel=$("#applabel"), bars=[].slice.call(document.querySelectorAll("#wave .wb"));
+
+function pick(rows,t){{ let v=null; for(let i=0;i<rows.length;i++){{ if(t>=rows[i][0]&&t<rows[i][1]) v=rows[i]; }} return v; }}
+function last(rows,t){{ let v=null; for(let i=0;i<rows.length;i++){{ if(t>=rows[i][0]) v=rows[i]; }} return v; }}
+
+/* A deterministic stand-in for a voice: three incommensurable sines, so the
+   amplitude never repeats on a clean cycle the way a sine wave would. No clock,
+   no Math.random — it is a pure function of t, so it seeks correctly. */
+function level(t){{
+  const v = 0.60*Math.sin(2*Math.PI*3.10*t)
+          + 0.30*Math.sin(2*Math.PI*7.30*t + 1.1)
+          + 0.25*Math.sin(2*Math.PI*1.70*t + 2.3);
+  return Math.max(0, Math.min(1, 0.52 + 0.46*v));
+}}
+
+function paint(t){{
+  /* — the orb: phase colour, glyph, and the bars moving with the voice — */
+  const ph = (pick(PHASES,t) || [0,0,"idle"])[2];
+  body.style.background = COL[ph];
+  const rec = (ph === "recording");
+  const lv  = rec ? level(t) : 0;
+
+  halo.style.opacity   = rec ? 1 : 0;
+  halo.style.transform = "scale(" + (1 + lv*0.35).toFixed(4) + ")";
+
+  for (let i=0;i<5;i++){{
+    /* the app's own rule: grow 30%, but the centre bar only 15%, and no bar
+       ever exceeds the glyph box */
+    const grow = 1 + lv * (i===2 ? 0.15 : 0.30);
+    const h = Math.min(BARS[i]*grow, 1.0);
+    bars[i].setAttribute("y1", (50 - h*50).toFixed(2));
+    bars[i].setAttribute("y2", (50 + h*50).toFixed(2));
+  }}
+
+  const translating = (t >= TRANSLATE_FROM && t < 26.0);
+  wave.style.opacity   = translating ? 0 : 1;
+  tglyph.style.opacity = translating ? 1 : 0;
+  const onAcc = (ph==="recording"||ph==="done"||ph==="working");
+  wave.style.color = onAcc ? "#FFFFFF" : "#EDEFF3";
+  tglyph.style.color = onAcc ? "#FFFFFF" : "#EDEFF3";
+
+  /* the working ring: 360 deg per 900ms, sweep 40->260 per 1100ms reversing */
+  if (ph === "working") {{
+    ring.style.opacity = 1; wave.style.opacity = 0; tglyph.style.opacity = 0;
+    const ang = (t*1000/900*360) % 360;
+    const ph2 = (t*1000 % 2200) / 1100;
+    const tri = ph2 < 1 ? ph2 : 2-ph2;
+    const sweep = 40 + 220 * (tri<0.5 ? 2*tri*tri : 1-Math.pow(-2*tri+2,2)/2);
+    const C = 2*Math.PI*42;
+    ringarc.setAttribute("stroke-dasharray", (C*sweep/360).toFixed(2)+" "+(C*2).toFixed(2));
+    ringarc.setAttribute("transform", "rotate("+(ang-90).toFixed(2)+" 50 50)");
+  }} else {{
+    ring.style.opacity = 0;
+  }}
+
+  /* — the composer — */
+  const c = last(COMPOSER,t);
+  if (c) {{
+    if (c[3] === "type") {{
+      const p = Math.max(0, Math.min(1, (t-c[0])/Math.max(0.001,(c[1]-c[0]))));
+      ctext.textContent = c[2].slice(0, Math.round(p*c[2].length));
+    }} else if (c[3] === "bullets") {{
+      ctext.textContent = "";
+    }} else {{
+      ctext.textContent = c[2];
+    }}
+  }}
+  /* the caret blinks at the app's own 500ms cadence, and only while focused */
+  const focused = (t >= 1.0 && t < 26.0);
+  caret.style.opacity = (focused && (Math.floor(t*2) % 2 === 0)) ? 1 : 0;
+
+  /* — the claim column — */
+  const cl = pick(CLAIMS,t);
+  const bt = cl ? cl[2] : "";
+  big.textContent = bt;
+  small.textContent = cl ? cl[3] : "";
+  const isGesture = (bt==="TAP"||bt==="HOLD"||bt==="FLICK"||bt==="DOUBLE TAP");
+  big.className = isGesture ? "gest" : "";
+  big.style.color = "#EDEFF3";
+
+  /* — the app label — */
+  const al = last(APPLABEL,t);
+  applabel.textContent = al ? al[2] : "Chat";
+
+  /* — the arc's chip labels: the same geometry, different words — */
+  const set = (t >= 18.0) && (t < 21.0) ? TONES_MAIL : TONES_CHAT;
+  for (let i=0;i<5;i++) document.getElementById("chiptx"+i).textContent = set[i];
+}}
+
+/* ── the timeline ────────────────────────────────────────────────────────── */
+const tl = gsap.timeline({{ paused:true }});
+const E  = "power3.out";
+const IR = {{ immediateRender:false }};   /* every fromTo — see the note at the top */
+
+/* one full-length proxy that repaints every discrete piece of state from t */
+tl.to({{p:0}}, {{ p:1, duration:{DUR}, ease:"none",
+  onUpdate:function(){{ paint(this.targets()[0].p * {DUR}); }} }}, 0);
+
+/* thumb helper: rises from below the frame, does its verb, and leaves the same
+   way. It is never on screen when it is not doing something. */
+function thumbIn(at, x, y, dur){{
+  tl.fromTo("#thumb", {{ opacity:0, x:x, y:{H}+90 }},
+                      {{ opacity:1, x:x, y:y, duration:dur, ease:E, immediateRender:false }}, at);
+}}
+function thumbOut(at, x, y, dur){{
+  tl.fromTo("#thumb", {{ opacity:1, x:x, y:y }},
+                      {{ opacity:0, x:x, y:{H}+90, duration:dur, ease:"power2.in", immediateRender:false }}, at);
+}}
+const TX = {ORB_CX}, TY = {ORB_CY};
+
+/* ═══ F1 · 0.00–4.00 — it appears because you typed ═══════════════════════ */
+/* the composer takes focus on the beat: its hairline lifts to the accent */
+tl.fromTo("#composer", {{ borderColor:"#2B2F37" }},
+                       {{ borderColor:"#7C6CFF", duration:0.30, ease:E, ...IR }}, 1.00);
+/* and only THEN does the orb arrive — the app's own "quick back" curve, 140ms */
+tl.fromTo("#orb", {{ opacity:0, scale:0.72 }},
+                  {{ opacity:1, scale:1, duration:0.14, ease:E, ...IR }}, 2.00);
+tl.fromTo("#claim", {{ opacity:0, y:14 }}, {{ opacity:1, y:0, duration:0.45, ease:E, ...IR }}, 2.00);
+
+/* ═══ F2 · 4.00–9.00 — TAP ════════════════════════════════════════════════ */
+thumbIn(4.30, TX, TY, 0.62);
+tl.fromTo("#thumb", {{ scale:1 }}, {{ scale:0.86, duration:0.09, yoyo:true, repeat:1, ease:"power2.out", ...IR }}, 5.00);
+thumbOut(5.20, TX, TY, 0.34);
+
+/* ═══ F3 · 9.00–15.00 — HOLD, and the arc fans out ════════════════════════ */
+thumbIn(9.30, TX, TY, 0.55);
+/* the scrim washes in at 0.42 and NO MORE — the app behind must stay readable
+   through it, because that legibility is the point of the shot */
+tl.fromTo("#scrim", {{ opacity:0 }}, {{ opacity:0.42, duration:0.26, ease:E, ...IR }}, 9.80);
+tl.fromTo("#world", {{ filter:"blur(0px)" }}, {{ filter:"blur(3px)", duration:0.26, ease:E, ...IR }}, 9.80);
+for (let i=0;i<5;i++){{
+  const cx = {[round(x,1) for x,_ in CHIPS]}[i], cy = {[round(y,1) for _,y in CHIPS]}[i];
+  tl.fromTo("#chip"+i,
+    {{ opacity:0, scale:0.55, x:(TX-{CHIP_W/2:.1f})-cx, y:(TY-{CHIP_H/2:.1f})-cy }},
+    {{ opacity:1, scale:1, x:0, y:0, duration:0.46, ease:"back.out(1.35)", ...IR }}, 9.86 + i*0.04);
+}}
+/* selection is by ANGLE — the thumb slides along the arc and the highlight
+   follows its heading, chip by chip, rather than jumping between quadrants */
+const SLIDE = [[11.00,1],[11.55,2]];
+tl.to("#thumb", {{ x:TX-118, y:TY-90,  duration:0.55, ease:"power2.inOut" }}, 10.55);
+tl.to("#thumb", {{ x:TX-150, y:TY+8,   duration:0.55, ease:"power2.inOut" }}, 11.20);
+[[10.82,0],[11.32,1],[11.82,2]].forEach(function(s){{
+  tl.call(function(){{ for(let i=0;i<5;i++) document.getElementById("chip"+i).classList.toggle("on", i===s[1]); }}, null, s[0]);
+}});
+tl.call(function(){{ for(let i=0;i<5;i++) document.getElementById("chip"+i).classList.remove("on"); }}, null, 12.80);
+thumbOut(12.70, TX-150, TY+8, 0.30);
+for (let i=0;i<5;i++){{
+  tl.to("#chip"+i, {{ opacity:0, scale:0.6,
+    x:(TX-{CHIP_W/2:.1f})-{[round(x,1) for x,_ in CHIPS]}[i],
+    y:(TY-{CHIP_H/2:.1f})-{[round(y,1) for _,y in CHIPS]}[i],
+    duration:0.26, ease:"power2.in" }}, 12.70 + i*0.02);
+}}
+tl.to("#scrim", {{ opacity:0, duration:0.26, ease:"power2.in" }}, 12.78);
+tl.to("#world", {{ filter:"blur(0px)", duration:0.26, ease:"power2.in" }}, 12.78);
+tl.fromTo("#tonetag", {{ opacity:0 }}, {{ opacity:1, duration:0.18, ...IR }}, 12.80);
+tl.to("#tonetag", {{ opacity:0, duration:0.30 }}, 13.90);
+
+/* ═══ F4 · 15.00–21.00 — FLICK, then the app changes and so does the arc ══ */
+thumbIn(14.85, TX, TY, 0.40);
+/* the flick: a fast short throw along the arc's heading and straight back out.
+   No menu ever opens. */
+tl.to("#thumb", {{ x:TX-196, y:TY-150, duration:0.17, ease:"power2.in" }}, 15.30);
+tl.to("#thumb", {{ opacity:0, duration:0.10 }}, 15.44);
+/* the tone it fired flashes at its own arc position for ~120ms, and is gone */
+tl.fromTo("#chip3", {{ opacity:0, scale:0.9, x:0, y:0 }},
+                    {{ opacity:1, scale:1, x:0, y:0, duration:0.07, ...IR }}, 15.28);
+tl.to("#chip3", {{ opacity:0, duration:0.12 }}, 15.40);
+tl.call(function(){{ document.getElementById("chip3").classList.add("on"); }}, null, 15.28);
+tl.call(function(){{ document.getElementById("chip3").classList.remove("on"); }}, null, 15.53);
+/* the consequence, fast: bullets assemble line by line on the beat */
+tl.fromTo("#bullets", {{ opacity:0 }}, {{ opacity:1, duration:0.20, ...IR }}, 17.06);
+tl.to("#composer", {{ opacity:0, duration:0.14 }}, 17.06);
+[0,1,2].forEach(function(i){{
+  tl.fromTo("#bullets div:nth-child("+(i+1)+")", {{ opacity:0, y:12 }},
+    {{ opacity:1, y:0, duration:0.26, ease:E, ...IR }}, 17.10 + i*0.16);
+}});
+
+/* THE MORPH — every property crossfading at once, and the orb identical
+   before and after. This is the film's thesis beat. */
+tl.to("#bullets", {{ opacity:0, duration:0.22, ease:"none" }}, 17.75);
+tl.to("#chat",    {{ opacity:0, duration:0.22, ease:"none" }}, 17.90);
+tl.fromTo("#mail", {{ opacity:0 }}, {{ opacity:1, duration:0.22, ease:"none", ...IR }}, 18.02);
+tl.fromTo("#composer", {{ opacity:0, borderRadius:"48px" }},
+  {{ opacity:1, borderRadius:"18px", duration:0.30, ease:"none", ...IR }}, 17.90);
+
+/* the same gesture, at the same pixel, and only the words have changed */
+thumbIn(18.34, TX, TY, 0.45);
+tl.fromTo("#scrim", {{ opacity:0 }}, {{ opacity:0.42, duration:0.24, ease:E, ...IR }}, 18.74);
+tl.fromTo("#world", {{ filter:"blur(0px)" }}, {{ filter:"blur(3px)", duration:0.26, ease:E, ...IR }}, 18.74);
+for (let i=0;i<5;i++){{
+  tl.fromTo("#chip"+i,
+    {{ opacity:0, scale:0.55, x:(TX-{CHIP_W/2:.1f})-{[round(x,1) for x,_ in CHIPS]}[i],
+       y:(TY-{CHIP_H/2:.1f})-{[round(y,1) for _,y in CHIPS]}[i] }},
+    {{ opacity:1, scale:1, x:0, y:0, duration:0.42, ease:"back.out(1.35)", ...IR }}, 18.78 + i*0.04);
+}}
+tl.to("#thumb", {{ x:TX-72, y:TY-224, duration:0.50, ease:"power2.inOut" }}, 19.20);
+tl.call(function(){{ document.getElementById("chip0").classList.add("on"); }}, null, 19.55);
+tl.call(function(){{ document.getElementById("chip0").classList.remove("on"); }}, null, 20.20);
+thumbOut(20.12, TX-72, TY-224, 0.28);
+for (let i=0;i<5;i++){{
+  tl.to("#chip"+i, {{ opacity:0, scale:0.6,
+    x:(TX-{CHIP_W/2:.1f})-{[round(x,1) for x,_ in CHIPS]}[i],
+    y:(TY-{CHIP_H/2:.1f})-{[round(y,1) for _,y in CHIPS]}[i],
+    duration:0.24, ease:"power2.in" }}, 20.12 + i*0.02);
+}}
+tl.to("#scrim", {{ opacity:0, duration:0.24, ease:"power2.in" }}, 20.20);
+tl.to("#world", {{ filter:"blur(0px)", duration:0.24, ease:"power2.in" }}, 20.20);
+
+/* ═══ F5 · 21.00–26.00 — DOUBLE TAP ══════════════════════════════════════ */
+/* the context re-skins back to Chat under the cut */
+tl.to("#mail", {{ opacity:0, duration:0.22, ease:"none" }}, 20.90);
+tl.to("#chat", {{ opacity:1, duration:0.22, ease:"none" }}, 20.90);
+tl.to("#composer", {{ borderRadius:"48px", duration:0.22, ease:"none" }}, 20.90);
+thumbIn(21.20, TX, TY, 0.50);
+/* two taps, 180ms apart */
+tl.fromTo("#thumb", {{ scale:1 }}, {{ scale:0.86, duration:0.07, yoyo:true, repeat:1, ease:"power2.out", ...IR }}, 21.80);
+tl.to("#thumb", {{ scale:0.86, duration:0.07, yoyo:true, repeat:1, ease:"power2.out" }}, 21.98);
+thumbOut(22.20, TX, TY, 0.28);
+/* the glyph swaps IN PLACE. The orb body, position and size are untouched —
+   only the glyph inside it changes, and it gets a clear beat to read. */
+tl.fromTo("#clang", {{ opacity:0 }}, {{ opacity:1, duration:0.30, ...IR }}, 24.30);
+tl.to("#clang", {{ opacity:0, duration:0.30 }}, 25.70);
+thumbIn(22.55, TX, TY, 0.30);
+tl.fromTo("#thumb", {{ scale:1 }}, {{ scale:0.86, duration:0.08, yoyo:true, repeat:1, ease:"power2.out", ...IR }}, 22.80);
+thumbOut(22.95, TX, TY, 0.26);
+
+/* ═══ F6 · 26.00–30.00 — the lockup and the honest terms ═════════════════ */
+/* the app just stops being in the way. The orb has been the mark all along. */
+tl.to(["#world","#claim"], {{ opacity:0, duration:0.50, ease:"power2.inOut" }}, 26.00);
+tl.to("#body", {{ opacity:0, duration:0.34, ease:"power2.inOut" }}, 26.70);
+/* the launcher icon and the wave mark are the same shape, so this is a scale,
+   not a morph */
+/* 3.365x takes the 50.2px orb glyph to the 169px lockup mark */
+tl.fromTo("#lockmark", {{ opacity:0, scale:1 }},
+  {{ opacity:1, scale:3.365, duration:0.72, ease:E, ...IR }}, 26.80);
+tl.to("#orb", {{ opacity:0, duration:0.26, ease:"none" }}, 26.86);
+tl.fromTo("#lockword", {{ opacity:0, x:-26 }},
+  {{ opacity:1, x:0, duration:0.60, ease:E, ...IR }}, 27.06);
+tl.fromTo("#fact1", {{ opacity:0, y:12 }}, {{ opacity:1, y:0, duration:0.44, ease:E, ...IR }}, 27.80);
+tl.fromTo("#fact2", {{ opacity:0, y:12 }}, {{ opacity:1, y:0, duration:0.44, ease:E, ...IR }}, 28.30);
+tl.fromTo("#url",   {{ opacity:0, y:10 }}, {{ opacity:1, y:0, duration:0.44, ease:E, ...IR }}, 29.00);
+
+paint(0);
+window.__timelines = window.__timelines || {{}};
+window.__timelines["rmblr"] = tl;
+}})();
+</script>
+</body>
+</html>
+"""
+
+with open(OUT, "w", encoding="utf-8") as f:
+    f.write(HTML)
+print(f"wrote {OUT}  ({len(HTML)} bytes)")
+print(f"  orb pinned at ({ORB_CX:.0f}, {ORB_CY:.0f})  size {ORB:.1f}px")
+print(f"  screen x {SCREEN_X:.0f}..{SCREEN_X+SCREEN_W:.0f}  fan r={FAN_R:.1f}  chip {CHIP_W:.1f}x{CHIP_H:.1f}")
+for i, (x, y) in enumerate(CHIPS):
+    print(f"  chip{i} {TONES_CHAT[i]:<13} left={x:7.1f} top={y:7.1f}  right={x+CHIP_W:7.1f}")

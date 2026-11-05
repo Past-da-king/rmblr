@@ -1,0 +1,452 @@
+#!/usr/bin/env python3
+"""RMBLR — flat cut. 30.0s · 1920x1080 · 60fps. (v4)
+
+Ayanda on v3: "I like the 3D-ness, but try the same thing with all the 3D
+removed. Flat flat version. But I like the phone. And it's still a bit still —
+you can do much, much better."
+
+THE RULE THAT REPLACES THE LIGHTING — **the orb is the only circle in a world of
+rectangles.** v3 made it the hero with speculars and bloom. Flat has none of
+that, so the hero-making moves to SHAPE: every panel, band, chip, phone, letter
+and bar in this film is a hard-edged rectangle, and the one round thing on screen
+is the product.
+
+WHAT FLAT BUYS BACK. A flat circle at 52px and at 416px are the same object
+scaled — so there is no hero/UI seam left to hide. ONE orb travels the entire
+film, swelling when the mechanic has to be legible and shrinking back onto the
+phone to do its job. v3 needed two orbs and a match-cut; this needs neither.
+
+AND THE MOTION. With no lighting or perspective to protect, the FRAME can
+reconfigure. The phone slides between three stations, colour fields wipe on the
+beat, the arc deals itself out as five full-width bands, the flick throws the orb
+across the frame. Nothing on screen holds longer than a bar, and every move lands
+on a 0.25s subdivision of the 120 BPM grid.
+
+  A 0.0- 2.0  TITLE     · five bars punch in and slam into the orb
+  B 2.0- 4.5  REVEAL    · the phone arrives, the orb takes its place
+  C 4.5- 8.0  TAP       · the orb swells, listens, and the sentence lands
+  D 8.0-12.0  HOLD      · the arc, dealt as five full-width bands
+  E 12.0-15.0 FLICK     · thrown across the frame, straight to the tone
+  F 15.0-19.0 APPS      · three phones, three different arcs
+  G 19.0-22.0 DRAG      · every place it could live, then the one you pick
+  H 22.0-26.0 TRANSLATE · the frame splits English | isiZulu
+  I 26.0-30.0 LOCKUP    · the circle opens back into the mark
+
+Exactly 30.000s so the approved score drops on unchanged.
+"""
+import os
+from apps import whatsapp, gmail, slack, keyboard, APPS_CSS
+from flat import FLAT_CSS
+
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
+W, H, FPS, DUR = 1920, 1080, 60, 30.0
+
+DEV_W, DEV_H, PAD = 415, 873, 11
+DEV_T = 103.5
+DEV_L, DEV_MID, DEV_R = 140.0, 752.5, 1365.0      # the three stations
+ORB_OX, ORB_OY = PAD + 300.0, PAD + 430.0          # the orb's spot on the screen
+OX, OY = DEV_L + ORB_OX, DEV_T + ORB_OY            # 451, 544.5 — its home in frame
+HERO = 8.0                                          # 52 -> 416px
+HX, HY = 600.0, 540.0
+
+BARS = [0.34, 0.66, 1.0, 0.72, 0.42]
+GAP = 100.0 / (5 * 2.2)
+BAR_X = [GAP * 0.6 + i * (GAP * 2) + GAP / 2 for i in range(5)]
+
+TONES = {"wa": ["CASUAL", "CLEAN UP", "GRAMMAR", "BULLETS", "SUMMARY"],
+         "gm": ["PROFESSIONAL", "SUMMARY", "CLEAN UP", "GRAMMAR", "BULLETS"],
+         "sl": ["CLEAN UP", "CASUAL", "BULLETS", "PROFESSIONAL", "SUMMARY"]}
+BAND_BG = ["#0A0B0D", "#7C6CFF", "#F2F4F8", "#2A2394", "#0A0B0D"]
+BAND_FG = ["#F2F4F8", "#0A0B0D", "#0A0B0D", "#F2F4F8", "#F2F4F8"]
+
+def wave_svg(eid, cls=""):
+    ls = "".join(f'<line class="wb" x1="{BAR_X[i]:.2f}" x2="{BAR_X[i]:.2f}" '
+                 f'y1="{50-BARS[i]*50:.2f}" y2="{50+BARS[i]*50:.2f}"/>' for i in range(5))
+    return (f'<svg id="{eid}" class="{cls}" viewBox="0 0 100 100" fill="none">'
+            f'<g stroke="currentColor" stroke-width="{GAP:.4f}" stroke-linecap="round">{ls}</g></svg>')
+
+def dev(eid, app_fn, key):
+    m = app_fn(1.0)
+    if key != "main":
+        for k in ("wa", "gm", "sl"):
+            m = m.replace(f'id="{k}-txt"', f'data-field="{k}"')
+    return (f'<div id="{eid}" class="dev"><div class="scr">{m}{keyboard(1.0)}</div></div>')
+
+PHASES = [
+    (0.00, 6.00, "idle"),
+    (6.00, 6.95, "recording"), (6.95, 7.50, "working"), (7.50, 8.00, "done"),
+    (8.00, 10.45, "idle"),
+    (10.45, 11.15, "recording"), (11.15, 11.55, "working"), (11.55, 12.00, "done"),
+    (12.00, 13.05, "idle"),
+    (13.05, 13.40, "recording"), (13.40, 13.65, "working"), (13.65, 14.05, "done"),
+    (14.05, 23.80, "idle"),
+    (23.80, 24.55, "recording"), (24.55, 24.95, "working"), (24.95, 25.45, "done"),
+    (25.45, 30.00, "idle"),
+]
+TRANSLATE_ON, TRANSLATE_OFF = 23.10, 24.95
+FIELDTEXT = [
+    (0.00,  "wa-txt", ""),
+    (7.50,  "wa-txt", "I'll be there at about half seven."),
+    (11.55, "wa-txt", "Yeah, half seven works — see you there."),
+    (13.65, "wa-txt", "half seven · bring the deck · ash drives"),
+    (19.00, "wa-txt", "Yeah, half seven works — see you there."),
+    (22.60, "wa-txt", "Thank you, I will see you tomorrow."),
+    (24.95, "wa-txt", "Ngiyabonga, ngizokubona kusasa."),
+]
+SLAM = [(5.30, 5.92, "TAP"), (8.80, 9.32, "HOLD"), (12.58, 13.10, "FLICK"),
+        (19.58, 20.06, "DRAG"), (22.58, 23.06, "DOUBLE TAP")]
+HEAD = [(2.55, 4.95, "IT SHOWS UP\nWHEN YOU TYPE."),
+        (14.55, 15.45, "STRAIGHT TO\nTHE TONE."),
+        (15.95, 19.45, "THE TONES CHANGE\nWITH THE APP."),
+        (21.25, 22.45, "PUT IT WHERE\nYOU WANT IT."),
+        (25.60, 26.42, "SAY IT IN ENGLISH.\nSEND IT IN ISIZULU.")]
+SUB = [(3.60, 4.55, "It appears only while a field has the cursor.")]
+NUM = [(2.45, 5.00, "01"), (5.32, 8.50, "02"), (8.82, 12.50, "03"),
+       (12.60, 15.50, "04"), (19.60, 22.50, "05")]
+LABEL = [(2.45, 5.00, "APPEARS"), (5.90, 8.50, "TAP"), (10.45, 12.50, "HOLD"),
+         (13.30, 15.50, "FLICK"), (15.55, 19.50, "PROFILES"),
+         (20.00, 22.50, "DRAG"), (23.00, 26.40, "TRANSLATE")]
+
+def js(rows):
+    """Serialise to JS. Real newlines in the copy must survive as \\n escapes —
+    a literal newline inside a JS string literal is a syntax error."""
+    def cell(c):
+        if isinstance(c, str):
+            return '"' + c.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+        return f"{c}"
+    return "[" + ",".join("[" + ",".join(cell(c) for c in r) + "]" for r in rows) + "]"
+
+bands = "".join(
+    f'<div class="band" id="bd{i}" style="top:{i*216}px;background:{BAND_BG[i]}">'
+    f'<b id="bdt{i}" data-layout-allow-overlap data-layout-allow-occlusion style="color:{BAND_FG[i]}"></b></div>' for i in range(5))
+streaks = "".join(f'<div class="streak" id="st{i}"></div>' for i in range(7))
+dots = "".join(f'<div class="dot" style="left:{40+c*74}px;top:{60+r*84}px"></div>'
+               for r in range(9) for c in range(5))
+
+HTML = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>RMBLR</title><style>
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-400-normal.woff2)format('woff2');font-weight:400;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-500-normal.woff2)format('woff2');font-weight:500;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-700-normal.woff2)format('woff2');font-weight:700;font-display:block}}
+@font-face{{font-family:Roboto;src:url(assets/fonts/roboto-latin-900-normal.woff2)format('woff2');font-weight:900;font-display:block}}
+@font-face{{font-family:NotoJP;src:url(assets/fonts/noto-sans-jp-japanese-500-normal.woff2)format('woff2');font-weight:500;font-display:block}}
+{FLAT_CSS}
+{APPS_CSS}
+#dev{{left:{DEV_L}px;top:{DEV_T}px}}
+#devB,#devC{{position:absolute;width:{DEV_W}px;height:{DEV_H}px;background:#000;
+  border:1px solid var(--line);border-radius:26px;padding:{PAD}px;top:{DEV_T}px;opacity:0}}
+#devB{{left:{DEV_MID}px}} #devC{{left:{DEV_R}px}}
+#orb{{left:{OX-26:.1f}px;top:{OY-26:.1f}px}}
+#wipe{{left:{OX-26:.1f}px;top:{OY-26:.1f}px}}
+#meter{{left:{HX-95:.0f}px;top:{HY+270:.0f}px;height:190px}}
+#head{{left:1010px;top:392px;width:840px}}
+#sub{{left:1010px;top:592px;width:800px}}
+#slam{{top:436px}}
+#split{{position:absolute;inset:0;background:var(--indigo);opacity:0;transform-origin:100% 50%}}
+#zuluw{{overflow:hidden}}
+#splitlab{{position:absolute;right:96px;top:104px;color:#0A0B0D;font-size:64px;font-weight:900;
+  letter-spacing:-.02em;opacity:0}}
+#splitlab2{{position:absolute;left:620px;top:104px;color:var(--dim);font-size:64px;font-weight:900;
+  letter-spacing:-.02em;opacity:0}}
+#rule{{position:absolute;left:1010px;top:560px;width:640px;height:6px;background:var(--indigo);
+  transform-origin:0 50%}}
+#lockmark{{left:{960-330:.0f}px;top:{540-101:.0f}px;width:202px;height:202px;opacity:0}}
+#lockword{{left:{960-90:.0f}px;top:{540-66:.0f}px}}
+.fact{{left:0;width:1920px;text-align:center}}
+#url{{left:0;width:1920px;text-align:center;top:872px}}
+#trace{{position:absolute;height:6px;background:var(--indigo);transform-origin:0 50%;opacity:0}}
+</style></head><body>
+<div id="root" data-composition-id="rmblr" data-width="{W}" data-height="{H}"
+     data-fps="{FPS}" data-duration="{DUR}">
+  <div class="clip lay" id="film" data-start="0" data-duration="{DUR}" data-track-index="0">
+
+    {dev("dev", whatsapp, "main")}
+    {dev("devB", gmail, "b")}
+    {dev("devC", slack, "c")}
+
+    <div id="dots">{dots}</div>
+    <div id="trace"></div>
+    {streaks}
+
+    <div id="orb"><div id="orbring"></div><div id="pulse"></div>{wave_svg("wave")}<div id="glyph">文A</div></div>
+    <div id="meter">{''.join(f'<div class="mbar" data-i="{i}"></div>' for i in range(5))}</div>
+
+    <div id="bands">{bands}</div>
+
+    <div id="split"></div>
+    <div id="splitlab">ISIZULU</div>
+    <div class="tw" id="zuluw" data-layout-allow-overlap data-layout-allow-occlusion style="position:absolute;left:1060px;top:470px;width:740px"><span id="zulu" data-layout-allow-overlap data-layout-allow-occlusion>Ngiyabonga,\nngizokubona\nkusasa.</span></div>
+    <div id="splitlab2">ENGLISH</div>
+
+    <div class="tw" id="head"><span></span></div>
+    <div class="tw" id="sub"><span></span></div>
+    <div id="rule"></div>
+    <div id="slam" data-layout-allow-overlap data-layout-allow-occlusion></div>
+
+
+    <div id="wipe"></div>
+    {''.join(f'<div class="sh" id="sh{i}" style="left:{i*384}px;width:385px"></div>' for i in range(5))}
+    {''.join(f'<div class="shr" id="shr{i}" style="top:{i*216}px;height:217px"></div>' for i in range(5))}
+    <div id="slot"><div id="slotinner">{''.join(f'<div class="slotrow" id="sr{i}" data-layout-allow-overlap data-layout-allow-occlusion></div>' for i in range(12))}</div></div>
+    <div id="slotrule"></div>
+    <div id="num" data-layout-allow-overlap data-layout-allow-occlusion></div>
+    <div id="label" data-layout-allow-overlap data-layout-allow-occlusion></div>
+    <div id="wide">{''.join('<div class="wbar"></div>' for _ in range(21))}</div>
+    <div id="prog"></div>
+
+    <div id="tonelist">{''.join(f'<div class="trow" id="tr{i}" data-layout-allow-overlap data-layout-allow-occlusion><span data-layout-allow-overlap data-layout-allow-occlusion></span></div>' for i in range(5))}</div>
+
+    <div class="chip" id="fired" style="left:640px;top:512px">BULLETS</div>
+
+    {wave_svg("lockmark")}
+    <div id="lockword">RMBLR</div>
+    <div class="fact" id="fact1" style="top:740px">Your own API key. No account. No subscription.</div>
+    <div class="fact" id="fact2" style="top:796px">A dictionary of your own words. Open source, MIT.</div>
+    <div id="url">github.com/Past-da-king/rmblr</div>
+
+  </div>
+</div>
+<script src="vendor/gsap.min.js"></script>
+<script>
+(function(){{
+const $$=s=>document.getElementById(s);
+const PHASES={js(PHASES)},FIELDTEXT={js(FIELDTEXT)},SLAM={js(SLAM)},HEAD={js(HEAD)},SUB={js(SUB)};
+const NUM={js(NUM)},LABEL={js(LABEL)};
+const TONES={{wa:{TONES['wa']},gm:{TONES['gm']},sl:{TONES['sl']}}};
+const BARS={BARS};
+const COL={{idle:"#15171B",recording:"#E05561",working:"#7C6CFF",done:"#4FBF87"}};
+const wide=[].slice.call(document.querySelectorAll(".wbar"));
+const orb=$$("orb"),orbring=$$("orbring"),wave=$$("wave"),glyph=$$("glyph"),
+      meter=[].slice.call(document.querySelectorAll(".mbar")),
+      wbars=[].slice.call(document.querySelectorAll("#wave .wb"));
+const pick=(r,t)=>{{let v=null;for(const x of r) if(t>=x[0]&&t<x[1]) v=x; return v;}};
+const last=(r,t)=>{{let v=null;for(const x of r) if(t>=x[0]) v=x; return v;}};
+const level=t=>Math.max(0,Math.min(1,0.52+0.46*(
+  0.60*Math.sin(2*Math.PI*3.10*t)+0.30*Math.sin(2*Math.PI*7.30*t+1.1)
+ +0.25*Math.sin(2*Math.PI*1.70*t+2.3))));
+
+function paint(t){{
+  const ph=(pick(PHASES,t)||[0,0,"idle"])[2];
+  const rec=ph==="recording", lv=rec?level(t):0;
+  orb.style.background=(t<1.90)?"#F2F4F8":COL[ph];
+  orbring.style.opacity=rec?1:0;
+  orbring.style.transform="scale("+(1+lv*0.30).toFixed(4)+")";
+  for(let i=0;i<5;i++){{
+    const h=Math.min(BARS[i]*(1+lv*(i===2?0.15:0.30)),1.0);
+    wbars[i].setAttribute("y1",(50-h*50).toFixed(2));
+    wbars[i].setAttribute("y2",(50+h*50).toFixed(2));
+    meter[i].style.height=(h*190).toFixed(1)+"px";     /* flat bars, no glow */
+  }}
+  const g=(t>={TRANSLATE_ON}&&t<{TRANSLATE_OFF}&&ph==="idle");
+  glyph.style.opacity=g?1:0; wave.style.opacity=g?0:1;
+
+  ["wa-txt","gm-txt","sl-txt"].forEach(id=>{{
+    const e=last(FIELDTEXT.filter(r=>r[1]===id),t),el=$$(id); if(el) el.textContent=e?e[2]:"";
+  }});
+  document.querySelectorAll("#dev .caret").forEach(c=>
+    c.style.opacity=(t>2.1&&t<26.0&&Math.floor(t*2)%2===0)?1:0);
+
+  const s=pick(SLAM,t); $$("slam").textContent=s?s[2]:"";
+  const nm=pick(NUM,t); $$("num").textContent=nm?nm[2]:"";
+  const lb=pick(LABEL,t); $$("label").textContent=lb?lb[2]:"";
+  /* the slot runs the five tones three times over so it can spin */
+  for(let i=0;i<12;i++) $$("sr"+i).textContent=TONES.wa[(i+3)%5];
+  /* the voice across the full width — a symmetric envelope, still flat bars */
+  for(let i=0;i<21;i++){{
+    const env=0.34+0.66*Math.sin(Math.PI*(i+0.5)/21);
+    const lw=rec?level(t+i*0.037):0;
+    wide[i].style.height=(14+lw*env*205).toFixed(1)+"px";
+  }}
+  const h=pick(HEAD,t); $$("head").firstElementChild.textContent=h?h[2]:"";
+  const b=pick(SUB,t);  $$("sub").firstElementChild.textContent=b?b[2]:"";
+  const set=t<15.0?TONES.wa:(t<16.35?TONES.wa:(t<17.65?TONES.gm:TONES.sl));
+  for(let i=0;i<5;i++) $$("bdt"+i).textContent=TONES.wa[i];
+  /* the three-app beat: whichever phone the frame is on owns the list */
+  const tset = t<16.80?TONES.wa : (t<18.04?TONES.gm : TONES.sl);
+  for(let i=0;i<5;i++) $$("tr"+i).firstElementChild.textContent=tset[i];
+}}
+
+const tl=gsap.timeline({{paused:true}}), IR={{immediateRender:false}};
+const OUT4="power4.out", INOUT="power3.inOut";
+gsap.set("#orb",{{transformOrigin:"50% 50%"}});
+gsap.set("#head span,#sub span,#zuluw span",{{yPercent:100}});
+gsap.set("#rule",{{scaleX:0}});
+gsap.set("#meter",{{transformOrigin:"50% 100%"}});
+tl.to({{p:0}},{{p:1,duration:{DUR},ease:"none",onUpdate:function(){{paint(this.targets()[0].p*{DUR});}}}},0);
+
+/* every reveal is a MASK, never a soft fade — flat design has no dissolve */
+function say(el,at,dur){{ tl.fromTo(el+" span",{{yPercent:100}},
+  {{yPercent:0,duration:dur||0.5,ease:OUT4,immediateRender:false}},at); }}
+function unsay(el,at){{ tl.to(el+" span",{{yPercent:-110,duration:0.35,ease:"power3.in"}},at); }}
+function slam(at){{ tl.fromTo("#slam",{{opacity:0,scaleX:1.25,scaleY:0.6}},
+  {{opacity:1,scaleX:1,scaleY:1,duration:0.26,ease:OUT4,immediateRender:false}},at); }}
+function unslam(at){{ tl.to("#slam",{{opacity:0,duration:0.14,ease:"none"}},at); }}
+function devTo(at,x,dur){{ tl.to("#dev",{{x:x,duration:dur||0.55,ease:OUT4}},at); }}
+function orbTo(at,dx,dy,sc,dur,ez){{ tl.to("#orb",{{x:dx,y:dy,scale:sc,duration:dur,ease:ez||OUT4}},at); }}
+
+const CX={960-OX:.1f}, CY={540-OY:.1f};
+gsap.set("#dev",{{y:1120,transformOrigin:"49.9% 56.7%"}});
+gsap.set("#orb",{{transformOrigin:"50% 50%"}});
+gsap.set("#slotinner",{{y:0}});
+gsap.set(".sh",{{y:-1140}});
+gsap.set(".shr",{{x:-2000}});
+
+/* THE SIGNATURE MOVE. The orb swells from wherever it is until it IS the frame,
+   the beat plays inside it, then it collapses back to 52dp. Every scene change
+   in this film goes through the circle — so the film reads as one object
+   transforming instead of a run of cuts. */
+function wipe(at,dx,dy,col,dur){{
+  tl.set("#wipe",{{x:dx,y:dy,backgroundColor:col}},at);
+  tl.fromTo("#wipe",{{scale:0}},{{scale:92,duration:dur||0.34,ease:"power2.in",
+    immediateRender:false}},at);
+}}
+function unwipe(at,dur){{ tl.to("#wipe",{{scale:0,duration:dur||0.40,ease:"power2.out"}},at); }}
+/* push INTO the phone so the app plays at full size — the landing is the payoff,
+   so you watch it happen at 3x, not as four pixels of grey */
+function zin(at,d){{
+  tl.to("#dev",{{scale:3.1,x:613,y:-58,duration:d||0.44,ease:OUT4}},at);
+  tl.to("#orb",{{scale:3.1,x:831,y:-171,duration:d||0.44,ease:OUT4}},at);
+}}
+function zout(at,d){{
+  tl.to("#dev",{{scale:1,x:0,y:0,duration:d||0.44,ease:OUT4}},at);
+  tl.to("#orb",{{scale:1,x:0,y:0,duration:d||0.44,ease:OUT4}},at);
+}}
+function shut(at,dur){{ for(let i=0;i<5;i++)
+  tl.to(".sh:nth-of-type("+(i+1)+")",{{y:0,duration:dur||0.30,ease:"power3.in"}},at+i*0.035); }}
+function unshut(at,dur){{ for(let i=0;i<5;i++)
+  tl.to(".sh:nth-of-type("+(i+1)+")",{{y:1140,duration:dur||0.34,ease:"power3.out"}},at+i*0.035); }}
+
+/* ═ 01 · 0.00–2.50 — OPEN. A dot becomes the frame, the mark forms, the mark
+      becomes the orb, the orb drops onto a phone. ═ */
+wipe(0.05,CX,CY,"#7C6CFF",0.40);
+for(let i=0;i<5;i++)
+  tl.fromTo("#meter .mbar:nth-child("+(i+1)+")",{{scaleY:0}},
+    {{scaleY:1,duration:0.26,ease:OUT4,immediateRender:false}},0.50+i*0.085);
+tl.fromTo("#meter",{{opacity:0,x:0,y:-320,scale:1.9}},
+  {{opacity:1,x:0,y:-320,scale:1.9,duration:0.01,...IR}},0.46);
+tl.to("#meter",{{scale:0.28,duration:0.30,ease:"power3.in"}},1.16);
+tl.to("#meter",{{opacity:0,duration:0.10}},1.38);
+tl.fromTo("#orb",{{opacity:0,scale:0.2,x:CX,y:CY}},
+  {{opacity:1,scale:16,x:CX,y:CY,duration:0.30,ease:OUT4,...IR}},1.30);
+unwipe(1.62,0.38);
+tl.to("#orb",{{scale:1,x:0,y:0,duration:0.60,ease:INOUT}},1.84);
+tl.to("#dev",{{y:0,duration:0.58,ease:OUT4}},1.76);
+tl.fromTo("#pulse",{{opacity:1,scale:1}},{{opacity:0,scale:3.4,duration:0.55,ease:OUT4,...IR}},2.40);
+
+/* ═ 02 · 2.50–5.00 — it appears because a field took the cursor ═ */
+say("#head",2.55); say("#sub",3.60,0.45);
+tl.to("#rule",{{scaleX:1,duration:0.5,ease:OUT4}},2.90);
+unsay("#head",4.88); unsay("#sub",4.88);
+tl.to("#rule",{{scaleX:0,duration:0.24,ease:"power3.in"}},4.88);
+
+/* ═ 03 · 5.00–8.50 — TAP ═ */
+wipe(5.02,0,0,"#E05561",0.30);
+slam(5.34); unslam(5.86);
+unwipe(5.86,0.34);
+tl.fromTo("#wide",{{opacity:0}},{{opacity:1,duration:0.20,...IR}},6.02);
+tl.to("#wide",{{opacity:0,duration:0.20}},6.92);
+tl.fromTo("#prog",{{opacity:1,scaleX:0}},{{opacity:1,scaleX:1,duration:0.54,ease:"none",...IR}},6.96);
+tl.to("#prog",{{opacity:0,duration:0.12}},7.52);
+zin(7.06); zout(8.08);
+
+/* ═ 04 · 8.50–12.50 — HOLD, and the tones run past like a slot ═ */
+wipe(8.52,0,0,"#7C6CFF",0.30);
+slam(8.84); unslam(9.30);
+tl.fromTo("#slotinner",{{y:0}},{{y:-1050,duration:1.05,ease:"power4.out",...IR}},9.28);
+tl.fromTo("#slot",{{opacity:0}},{{opacity:1,duration:0.12,...IR}},9.26);
+tl.fromTo("#slotrule",{{opacity:0,scaleX:0}},{{opacity:1,scaleX:1,duration:0.26,ease:OUT4,...IR}},10.30);
+tl.to(["#slot","#slotrule"],{{opacity:0,duration:0.20}},10.58);
+unwipe(10.44,0.36);
+tl.fromTo("#wide",{{opacity:0}},{{opacity:1,duration:0.16,...IR}},10.48);
+tl.to("#wide",{{opacity:0,duration:0.16}},11.12);
+zin(11.16,0.38); zout(12.02,0.38);
+
+/* ═ 05 · 12.50–15.50 — FLICK ═ */
+shut(12.50,0.26); slam(12.62); unslam(13.06);
+unshut(13.02,0.30);
+tl.fromTo("#st0",{{opacity:1,x:1560,width:420,y:-30}},
+  {{opacity:0,x:120,width:120,duration:0.34,ease:"power3.in",...IR}},12.98);
+tl.fromTo("#fired",{{opacity:0,scale:0.6}},{{opacity:1,scale:1,duration:0.14,ease:OUT4,...IR}},13.06);
+tl.to("#fired",{{opacity:0,duration:0.14}},13.36);
+tl.call(()=>$$("fired").classList.add("on"),null,13.06);
+zin(13.28,0.36); zout(14.10,0.40);
+say("#head",14.55);
+
+/* ═ 06 · 15.50–19.50 — the three apps, dealt by a column shutter ═ */
+unsay("#head",15.38);
+shut(15.40,0.24);
+tl.to("#orb",{{opacity:0,duration:0.14}},15.44);
+tl.set("#dev",{{x:0,scale:1}},15.46);
+unshut(15.66,0.30);
+say("#head",15.95);
+tl.to("#dev",{{x:-900,duration:0.46,ease:"power3.in"}},16.62);
+tl.fromTo("#devB",{{opacity:1,x:287.5}},{{opacity:1,x:-612.5,duration:0.5,ease:OUT4,...IR}},16.62);
+tl.to("#devB",{{x:-1512.5,duration:0.46,ease:"power3.in"}},17.86);
+tl.fromTo("#devC",{{opacity:1,x:-325}},{{opacity:1,x:-1225,duration:0.5,ease:OUT4,...IR}},17.86);
+tl.to("#devC",{{x:-2125,duration:0.46,ease:"power3.in"}},19.12);
+gsap.set("#tonelist span",{{yPercent:110}});
+[0,1,2].forEach(d=>{{
+  const at=[15.85,16.86,18.10][d];
+  for(let i=0;i<5;i++){{
+    tl.fromTo("#tr"+i+" span",{{yPercent:110}},
+      {{yPercent:0,duration:0.26,ease:OUT4,immediateRender:false}},at+i*0.05);
+    tl.to("#tr"+i+" span",{{yPercent:-110,duration:0.20,ease:"power3.in"}},at+0.80+i*0.028);
+  }}
+}});
+
+/* ═ 07 · 19.50–22.50 — DRAG, seen from inside the screen ═ */
+unsay("#head",19.38);
+wipe(19.30,0,0,"#7C6CFF",0.28);
+slam(19.60); unslam(20.02);
+tl.set("#dev",{{x:0,scale:1,y:0}},19.34);
+tl.set("#orb",{{x:0,y:0,scale:1,opacity:1}},19.34);
+unwipe(20.02,0.34);
+zin(20.06,0.40);
+tl.fromTo("#dots",{{opacity:0,x:{DEV_L+PAD:.1f},y:{DEV_T+PAD:.1f}}},
+  {{opacity:1,duration:0.20,...IR}},20.44);
+tl.to("#orb",{{x:831-236*3.1,y:-171-186*3.1,duration:0.52,ease:INOUT}},20.62);
+tl.to("#dots",{{opacity:0,duration:0.22}},21.14);
+tl.fromTo("#pulse",{{opacity:1,scale:1}},{{opacity:0,scale:3.0,duration:0.42,ease:OUT4,...IR}},21.14);
+zout(21.20,0.42);
+tl.to("#orb",{{x:-236,y:-186,duration:0.42,ease:OUT4}},21.20);
+say("#head",21.30);
+
+/* ═ 08 · 22.50–26.50 — the orb is the divider ═ */
+unsay("#head",22.42);
+shut(22.44,0.24); slam(22.62); unslam(23.02); unshut(22.98,0.30);
+tl.fromTo("#split",{{opacity:1,scaleX:0}},{{opacity:1,scaleX:0.5,duration:0.46,ease:OUT4,...IR}},23.06);
+tl.fromTo("#splitlab",{{opacity:0,y:-30}},{{opacity:1,y:0,duration:0.32,ease:OUT4,...IR}},23.30);
+tl.fromTo("#splitlab2",{{opacity:0,y:-30}},{{opacity:1,y:0,duration:0.32,ease:OUT4,...IR}},23.22);
+tl.to("#orb",{{x:0,y:0,duration:0.40,ease:OUT4}},23.06);
+tl.fromTo("#wide",{{opacity:0}},{{opacity:1,duration:0.16,...IR}},23.84);
+tl.to("#wide",{{opacity:0,duration:0.16}},24.52);
+say("#zuluw",24.98,0.46);
+tl.to("#split",{{scaleX:1,duration:0.40,ease:INOUT}},25.36);
+tl.to("#zuluw span",{{yPercent:-110,duration:0.28,ease:"power3.in"}},25.32);
+tl.to(["#splitlab","#splitlab2"],{{opacity:0,duration:0.22}},25.36);
+tl.to("#split",{{opacity:0,duration:0.28}},25.74);
+say("#head",25.62);
+
+/* ═ 09 · 26.50–30.00 — the circle closes the film it opened ═ */
+unsay("#head",26.34);
+tl.to("#dev",{{y:1120,duration:0.60,ease:"power3.in"}},26.10);
+tl.to("#orb",{{x:CX,y:CY,duration:0.46,ease:INOUT}},26.30);
+wipe(26.72,CX,CY,"#7C6CFF",0.34);
+tl.to("#orb",{{opacity:0,duration:0.10}},26.86);
+unwipe(27.08,0.40);
+tl.fromTo("#lockmark",{{opacity:0,scaleX:0.2,scaleY:0.2}},
+  {{opacity:1,scaleX:1,scaleY:1,duration:0.44,ease:OUT4,...IR}},27.16);
+tl.to("#lockmark",{{x:-40,duration:0.42,ease:OUT4}},27.56);
+tl.fromTo("#lockword",{{opacity:0,x:-60}},{{opacity:1,x:0,duration:0.48,ease:OUT4,...IR}},27.74);
+tl.fromTo("#fact1",{{opacity:0,y:22}},{{opacity:1,y:0,duration:0.34,ease:OUT4,...IR}},28.26);
+tl.fromTo("#fact2",{{opacity:0,y:22}},{{opacity:1,y:0,duration:0.34,ease:OUT4,...IR}},28.60);
+tl.fromTo("#url",{{opacity:0,y:18}},{{opacity:1,y:0,duration:0.34,ease:OUT4,...IR}},29.08);
+
+paint(0);
+window.__timelines=window.__timelines||{{}};
+window.__timelines["rmblr"]=tl;
+}})();
+</script></body></html>
+"""
+open(OUT, "w", encoding="utf-8").write(HTML)
+print(f"wrote index.html ({len(HTML)} bytes)  orb home ({OX},{OY})  hero x{HERO}")
