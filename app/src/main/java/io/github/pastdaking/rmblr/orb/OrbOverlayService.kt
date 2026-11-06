@@ -804,8 +804,18 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
 
     // ---------------------------------------------------------------- dictation
 
+    /** A one-tap dictation (widget, tile) already holds the microphone. */
+    private fun quickHoldsMic(): Boolean {
+        val p = io.github.pastdaking.rmblr.quick.QuickDictationState.snapshot.value.phase
+        if (p != io.github.pastdaking.rmblr.quick.QuickPhase.RECORDING && p != io.github.pastdaking.rmblr.quick.QuickPhase.WORKING) return false
+        OrbState.setPhase(OrbPhase.FAILED, "Already dictating from a widget.")
+        handler.postDelayed({ OrbState.setPhase(OrbPhase.IDLE) }, 1600)
+        return true
+    }
+
     /** Record, then hand back what was said in [language] rather than as it was said. */
     private fun beginTranslation(language: String) {
+        if (quickHoldsMic()) return
         if (language.isBlank()) {
             OrbState.setPhase(OrbPhase.FAILED, "No languages set for the arc yet.")
             handler.postDelayed({ OrbState.setPhase(OrbPhase.IDLE) }, 1600)
@@ -820,6 +830,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     }
 
     private fun beginDictation(tone: Tone?) {
+        if (quickHoldsMic()) return
         // A tone the current engine cannot honour is dropped here rather than silently
         // ignored later, so what happens matches what Settings said would happen.
         activeTone = tone?.takeIf { prefs.getEngine().supportsTone }
