@@ -71,6 +71,14 @@ import io.github.pastdaking.rmblr.ui.components.copyToClipboard
 import io.github.pastdaking.rmblr.ui.components.openUrl
 import io.github.pastdaking.rmblr.ui.components.Space
 import io.github.pastdaking.rmblr.ui.screens.HistoryScreen
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Text
+import androidx.compose.runtime.rememberCoroutineScope
+import io.github.pastdaking.rmblr.ui.m3.TonalIconButton
+import io.github.pastdaking.rmblr.ui.screens.HomePhase
+import io.github.pastdaking.rmblr.ui.screens.HomeSession
+import io.github.pastdaking.rmblr.ui.screens.HomeScreen
 import io.github.pastdaking.rmblr.ui.screens.OrbSetupScreen
 import io.github.pastdaking.rmblr.ui.screens.SettingsScreen
 import io.github.pastdaking.rmblr.ui.screens.OnboardingPrefs
@@ -168,6 +176,10 @@ class MainActivity : ComponentActivity() {
                 }
 
                 var selectedTabIndex by remember { mutableIntStateOf(0) }
+                var showSetup by remember { mutableStateOf(false) }
+                var openItemId by remember { mutableStateOf<String?>(null) }
+                val homeScope = rememberCoroutineScope()
+                val session = remember { HomeSession(this@MainActivity, prefsManager, historyRepo, homeScope) }
                 var hasMicPermission by remember {
                     mutableStateOf(
                         ContextCompat.checkSelfPermission(
@@ -255,11 +267,16 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     containerColor = Ink,
                     bottomBar = {
-                        FloatingNav(
-                            items = navItems,
-                            selected = selectedTabIndex,
-                            onSelect = { selectedTabIndex = it }
-                        )
+                        // Recording and Result take the whole screen, like the design.
+                        val focused = selectedTabIndex == 0 && !showSetup &&
+                            session.phase != HomePhase.Idle
+                        if (!focused) {
+                            FloatingNav(
+                                items = navItems,
+                                selected = selectedTabIndex,
+                                onSelect = { showSetup = false; selectedTabIndex = it }
+                            )
+                        }
                     },
                     modifier = Modifier.fillMaxSize()
                 ) { innerPadding ->
@@ -284,14 +301,44 @@ class MainActivity : ComponentActivity() {
                         }
 
                         Box(modifier = Modifier.weight(1f)) {
-                            when (selectedTabIndex) {
-                                0 -> OrbSetupScreen(
-                                    prefsManager = prefsManager,
-                                    historyRepo = historyRepo,
-                                    onNavigateToSettings = { selectedTabIndex = 3 }
+                            if (showSetup) {
+                                BackHandler { showSetup = false }
+                                Column(Modifier.fillMaxSize()) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.sm)
+                                    ) {
+                                        TonalIconButton(
+                                            Icons.AutoMirrored.Filled.ArrowBack, "Back",
+                                            { showSetup = false }, container = Ink
+                                        )
+                                        Text(
+                                            "Orb setup", color = TextHigh,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            modifier = Modifier.padding(start = Space.sm)
+                                        )
+                                    }
+                                    OrbSetupScreen(
+                                        prefsManager = prefsManager,
+                                        historyRepo = historyRepo,
+                                        onNavigateToSettings = { showSetup = false; selectedTabIndex = 3 }
+                                    )
+                                }
+                            } else when (selectedTabIndex) {
+                                0 -> HomeScreen(
+                                    session = session,
+                                    prefs = prefsManager,
+                                    history = historyRepo,
+                                    onOpenSetup = { showSetup = true },
+                                    onSeeAll = { selectedTabIndex = 2 },
+                                    onOpenItem = { openItemId = it.id; selectedTabIndex = 2 }
                                 )
                                 1 -> ProfilesScreen()
-                                2 -> HistoryScreen(historyRepo = historyRepo)
+                                2 -> HistoryScreen(
+                                    historyRepo = historyRepo,
+                                    openItemId = openItemId,
+                                    onOpenConsumed = { openItemId = null }
+                                )
                                 3 -> SettingsScreen(prefsManager = prefsManager)
                             }
                         }

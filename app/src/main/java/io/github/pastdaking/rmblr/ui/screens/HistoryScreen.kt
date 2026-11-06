@@ -1,5 +1,19 @@
 package io.github.pastdaking.rmblr.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.LaunchedEffect
+import io.github.pastdaking.rmblr.ui.m3.ConfirmSheet
+import io.github.pastdaking.rmblr.ui.m3.GroupedRow
+import io.github.pastdaking.rmblr.ui.m3.M3Chip
+import io.github.pastdaking.rmblr.ui.m3.RmblrSnackbarHost
+import io.github.pastdaking.rmblr.ui.m3.TonalIconButton
+import io.github.pastdaking.rmblr.ui.theme.OnAccentWash
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -87,12 +101,15 @@ import java.util.Locale
 @Composable
 fun HistoryScreen(
     historyRepo: HistoryRepository,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    openItemId: String? = null,
+    onOpenConsumed: () -> Unit = {}
 ) {
     val historyItems by historyRepo.historyFlow.collectAsState()
     val snippetItems by historyRepo.snippetsFlow.collectAsState()
-    val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snack = remember { SnackbarHostState() }
 
     val dictionary = remember { DictionaryRepository.getInstance(context) }
     val words by dictionary.entries.collectAsState()
@@ -103,20 +120,13 @@ fun HistoryScreen(
         DictionaryRepository.suggestionsFrom(historyItems, words)
     }
     var query by remember { mutableStateOf("") }
-    var redoing by remember { mutableStateOf<DictationHistoryItem?>(null) }
-    var redoBusy by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val prefsManager = remember { PreferencesManager.getInstance(context) }
-    val tones = remember { ToneStore(context) }
+    var filter by remember { mutableStateOf(HistoryFilter.ALL) }
+    var detailId by remember { mutableStateOf<String?>(null) }
+    var confirmClear by remember { mutableStateOf(false) }
 
-    // Matched against BOTH the raw and the tidied text: you remember what you said far
-    // more often than you remember what came back.
-    val shownHistory = remember(historyItems, query) {
-        val q = query.trim()
-        if (q.isEmpty()) historyItems
-        else historyItems.filter {
-            it.rawText.contains(q, ignoreCase = true) || it.cleanedText.contains(q, ignoreCase = true)
-        }
+    // The Home screen can ask for a particular dictation to be opened.
+    LaunchedEffect(openItemId) {
+        if (openItemId != null) { detailId = openItemId; onOpenConsumed() }
     }
 
     var newWord by remember { mutableStateOf("") }
@@ -129,108 +139,77 @@ fun HistoryScreen(
     var newSnippetContent by remember { mutableStateOf("") }
     var newSnippetShortcut by remember { mutableStateOf("") }
 
+    val detail = detailId?.let { id -> historyItems.firstOrNull { it.id == id } }
+    if (detail != null) {
+        BackHandler { detailId = null }
+        HistoryDetail(
+            item = detail,
+            historyRepo = historyRepo,
+            onBack = { detailId = null },
+            onDeleted = { removed ->
+                detailId = null
+                scope.launch {
+                    val r = snack.showSnackbar("Dictation deleted", actionLabel = "Undo")
+                    if (r == SnackbarResult.ActionPerformed) historyRepo.restoreHistoryItem(removed)
+                }
+            },
+            modifier = modifier
+        )
+        return
+    }
+
+    Box(modifier = modifier.fillMaxSize().background(Ink)) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
-            .background(Ink)
-            .padding(horizontal = Space.xl)
-            .padding(top = Space.xl)
+            .padding(horizontal = Space.lg)
+            .padding(top = Space.lg)
             .testTag("history_screen")
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp)
         ) {
             Text("History", color = TextHigh, style = MaterialTheme.typography.displaySmall)
 
             if (selectedTab == 0 && historyItems.isNotEmpty()) {
-                IconButton(onClick = { historyRepo.clearHistory() }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Clear history", tint = TextMid)
-                }
+                TonalIconButton(Icons.Default.DeleteSweep, "Clear history", { confirmClear = true })
             } else if (selectedTab == 2) {
-                IconButton(onClick = { showAddSnippet = !showAddSnippet }) {
-                    Icon(Icons.Default.Add, contentDescription = "New snippet", tint = Accent)
-                }
+                TonalIconButton(Icons.Default.Add, "New snippet", { showAddSnippet = !showAddSnippet })
             }
         }
 
-        redoing?.let { item ->
-            RedoSheet(
-                item = item,
-                tones = tones.load(),
-                busy = redoBusy,
-                onDismiss = { if (!redoBusy) redoing = null },
-                onPick = { tone ->
-                    redoBusy = true
-                    scope.launch {
-                        // Rewrites what was SAID, not what came back — running a tone
-                        // over an already-toned result compounds the rewriting.
-                        val result = GeminiApiClient.postProcessText(
-                            inputText = item.rawText.ifBlank { item.cleanedText },
-                            apiKey = prefsManager.getEffectiveApiKey(),
-                            preset = CleanupPreset.CUSTOM,
-                            customPrompt = tone.prompt
-                        )
-                        redoBusy = false
-                        result.onSuccess { text ->
-                            if (text.isNotBlank()) {
-                                historyRepo.addHistoryItem(
-                                    DictationHistoryItem(
-                                        rawText = item.rawText,
-                                        cleanedText = text,
-                                        mode = TranscriptionMode.POST_PROCESS_CLEANUP,
-                                        preset = CleanupPreset.CUSTOM
-                                    )
-                                )
-                                clipboardManager.setText(AnnotatedString(text))
-                            }
-                        }
-                        redoing = null
-                    }
-                }
-            )
+        Spacer(Modifier.height(Space.md))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            M3Chip("Dictations ${historyItems.size}", selectedTab == 0, { selectedTab = 0 }, showCheck = false)
+            M3Chip("Dictionary ${words.size}", selectedTab == 1, { selectedTab = 1 }, showCheck = false)
+            M3Chip("Snippets ${snippetItems.size}", selectedTab == 2, { selectedTab = 2 }, showCheck = false)
         }
 
-        Spacer(Modifier.height(Space.lg))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            SegmentTab("Dictations", historyItems.size, selectedTab == 0) { selectedTab = 0 }
-            SegmentTab("Dictionary", words.size, selectedTab == 1) { selectedTab = 1 }
-            SegmentTab("Snippets", snippetItems.size, selectedTab == 2) { selectedTab = 2 }
-        }
-
-        Spacer(Modifier.height(Space.lg))
+        Spacer(Modifier.height(Space.md))
 
         if (selectedTab == 0) {
-            if (historyItems.isNotEmpty()) {
-                SnippetField(query, { query = it }, "Search what you have said")
-                Spacer(Modifier.height(Space.lg))
-            }
-
-            if (shownHistory.isEmpty()) {
-                EmptyState(
-                    headline = if (query.isBlank()) "Nothing dictated yet" else "Nothing matches that",
-                    body = if (query.isBlank())
-                        "Tap a text box in any app, tap the orb, and say something. It lands here."
-                    else "Try a word you know you actually said."
-                )
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(Space.sm),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = Space.navClear),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    items(shownHistory, key = { it.id }) { item ->
-                        HistoryCard(
-                            item = item,
-                            onCopy = { text -> clipboardManager.setText(AnnotatedString(text)) },
-                            onDelete = { historyRepo.deleteHistoryItem(item.id) },
-                            onRedo = { redoing = item }
-                        )
+            DictationsTab(
+                items = historyItems,
+                query = query,
+                onQuery = { query = it },
+                filter = filter,
+                onFilter = { filter = it },
+                onOpen = { detailId = it.id },
+                onDelete = { item ->
+                    historyRepo.deleteHistoryItem(item.id)
+                    scope.launch {
+                        val r = snack.showSnackbar("Dictation deleted", actionLabel = "Undo")
+                        if (r == SnackbarResult.ActionPerformed) historyRepo.restoreHistoryItem(item)
                     }
-                }
-            }
+                },
+                modifier = Modifier.weight(1f)
+            )
         } else if (selectedTab == 1) {
             DictionaryTab(
                 words = words,
@@ -250,6 +229,7 @@ fun HistoryScreen(
                 modifier = Modifier.weight(1f)
             )
         } else {
+            val clipboardManager = LocalClipboardManager.current
             Column(modifier = Modifier.weight(1f)) {
                 AnimatedVisibility(visible = showAddSnippet) {
                     Column(modifier = Modifier.padding(bottom = Space.md)) {
@@ -299,12 +279,12 @@ fun HistoryScreen(
                     )
                 } else {
                     LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(Space.sm),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = Space.navClear),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(snippetItems, key = { it.id }) { snippet ->
-                            Panel(padding = androidx.compose.foundation.layout.PaddingValues(Space.lg)) {
+                        itemsIndexed(snippetItems, key = { _, s -> s.id }) { index, snippet ->
+                            GroupedRow(index, snippetItems.size) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.fillMaxWidth()
@@ -318,10 +298,10 @@ fun HistoryScreen(
                                     if (snippet.shortcut.isNotBlank()) {
                                         Text(
                                             text = snippet.shortcut,
-                                            color = Accent,
+                                            color = OnAccentWash,
                                             style = MaterialTheme.typography.labelSmall,
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
+                                                .clip(RoundedCornerShape(8.dp))
                                                 .background(AccentWash)
                                                 .padding(horizontal = Space.sm, vertical = 2.dp)
                                         )
@@ -330,9 +310,7 @@ fun HistoryScreen(
                                     IconButton(
                                         onClick = {
                                             // Straight into whatever has the cursor, if
-                                            // the accessibility service is on. Copying
-                                            // was all it ever did, which made snippets a
-                                            // thing you had to go and fetch.
+                                            // the accessibility service is on.
                                             val typed = FieldWatcherService.instance
                                                 ?.insertAtCursor(snippet.content) == true
                                             if (!typed) {
@@ -364,62 +342,18 @@ fun HistoryScreen(
             }
         }
     }
-}
-
-/** Re-run something already said through a different tone. */
-@Composable
-private fun RedoSheet(
-    item: DictationHistoryItem,
-    tones: List<Tone>,
-    busy: Boolean,
-    onPick: (Tone) -> Unit,
-    onDismiss: () -> Unit
-) {
-    RmblrSheet("Say it another way", onDismiss) {
-        Text(
-            text = item.rawText,
-            color = TextMid,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 3
-        )
-        Spacer(Modifier.height(Space.lg))
-        if (busy) {
-            Text("Rewriting…", color = Accent, style = MaterialTheme.typography.bodyMedium)
-        } else {
-            SheetOptions {
-                tones.forEach { tone ->
-                    SheetOption(
-                        title = tone.name,
-                        supporting = tone.description,
-                        selected = false,
-                        onClick = { onPick(tone) }
-                    )
-                }
-            }
-        }
+    RmblrSnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(bottom = 104.dp))
     }
-}
 
-@Composable
-private fun SegmentTab(label: String, count: Int, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .pressable(onClick = onClick)
-            .clip(RoundedCornerShape(Radius.pill))
-            .background(if (selected) Accent else Surface)
-            .padding(horizontal = Space.lg, vertical = Space.md)
-    ) {
-        Text(
-            text = label,
-            color = if (selected) OnAccent else TextMid,
-            style = MaterialTheme.typography.labelLarge
-        )
-        Spacer(Modifier.width(Space.sm))
-        Text(
-            text = count.toString(),
-            color = if (selected) OnAccent.copy(alpha = 0.7f) else TextLow,
-            style = MaterialTheme.typography.labelSmall
+    if (confirmClear) {
+        ConfirmSheet(
+            title = "Clear all dictations?",
+            body = "This removes all ${historyItems.size} dictations from this phone. It cannot be undone.",
+            confirmLabel = "Clear all",
+            destructive = true,
+            icon = Icons.Default.DeleteSweep,
+            onConfirm = { historyRepo.clearHistory(); confirmClear = false },
+            onDismiss = { confirmClear = false }
         )
     }
 }
@@ -465,68 +399,6 @@ private fun EmptyState(headline: String, body: String) {
         Text(headline, color = TextHigh, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(Space.xs))
         Text(body, color = TextMid, style = MaterialTheme.typography.bodySmall)
-    }
-}
-
-@Composable
-fun HistoryCard(
-    item: DictationHistoryItem,
-    onCopy: (String) -> Unit,
-    onDelete: () -> Unit,
-    onRedo: (() -> Unit)? = null
-) {
-    // Locale.getDefault() is not observable state, so a composable that reads it keeps
-    // formatting dates in the old locale after the user changes theirs. The
-    // configuration IS observable, so this recomposes when the phone's language does.
-    val configuration = LocalConfiguration.current
-    val dateStr = remember(configuration, item.timestamp) {
-        val locale = ConfigurationCompat.getLocales(configuration)[0] ?: Locale.ROOT
-        SimpleDateFormat("MMM d, HH:mm", locale).format(Date(item.timestamp))
-    }
-    val label = if (item.mode == TranscriptionMode.POST_PROCESS_CLEANUP) item.preset.displayName else "Verbatim"
-
-    Panel {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(label, color = TextMid, style = MaterialTheme.typography.labelSmall)
-            Spacer(Modifier.width(Space.sm))
-            Text(dateStr, color = TextLow, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
-            if (onRedo != null) {
-                IconButton(onClick = onRedo, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        Icons.Default.Autorenew,
-                        contentDescription = "Say it another way",
-                        tint = TextMid,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-            IconButton(onClick = { onCopy(item.cleanedText) }, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = TextMid, modifier = Modifier.size(16.dp))
-            }
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Delete", tint = TextLow, modifier = Modifier.size(16.dp))
-            }
-        }
-
-        Spacer(Modifier.height(Space.sm))
-
-        Text(
-            text = item.cleanedText,
-            color = TextHigh,
-            style = MaterialTheme.typography.bodyLarge
-        )
-
-        if (item.rawText.isNotBlank() && item.rawText != item.cleanedText) {
-            Spacer(Modifier.height(Space.md))
-            Hairline()
-            Spacer(Modifier.height(Space.md))
-            Text("As spoken", color = TextLow, style = MaterialTheme.typography.labelSmall)
-            Spacer(Modifier.height(2.dp))
-            Text(item.rawText, color = TextMid, style = MaterialTheme.typography.bodySmall)
-        }
     }
 }
 

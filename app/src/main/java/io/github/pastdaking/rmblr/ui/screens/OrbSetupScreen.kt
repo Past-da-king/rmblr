@@ -114,7 +114,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Whether the operator has switched our accessibility service on in Android settings. */
-private fun accessibilityEnabled(context: android.content.Context): Boolean {
+internal fun accessibilityEnabled(context: android.content.Context): Boolean {
     val expected = "${context.packageName}/${FieldWatcherService::class.java.name}"
     val enabled = Settings.Secure.getString(
         context.contentResolver,

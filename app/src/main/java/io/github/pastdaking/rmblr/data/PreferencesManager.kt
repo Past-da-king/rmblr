@@ -182,11 +182,34 @@ class PreferencesManager private constructor(context: Context) {
      * until your language is not one of the fifteen someone else picked. It is only ever
      * a word handed to a model, so any word will do.
      */
-    fun getSpokenLanguage(): String = prefs.getString("language_name", "") ?: ""
+    fun getSpokenLanguage(): String = getLanguageSelection().effectiveName
 
     fun setSpokenLanguage(name: String) {
-        prefs.edit().putString("language_name", name.trim()).apply()
-        _languageFlow.value = name.trim()
+        setLanguageSelection(LanguageSelection.fromLegacy(name))
+    }
+
+    private val _selectionFlow = MutableStateFlow(readSelection())
+
+    /** The full selection (Auto, one language, or several), as the Language sheet edits it. */
+    val languageSelectionFlow: StateFlow<LanguageSelection> = _selectionFlow.asStateFlow()
+
+    /**
+     * Stored under its own key and mirrored into the old `language_name`, so a build that
+     * only knows the single name (and an upgrading user's existing value) keep working.
+     */
+    private fun readSelection(): LanguageSelection =
+        LanguageSelection.decode(prefs.getString("language_selection", null))
+            ?: LanguageSelection.fromLegacy(prefs.getString("language_name", ""))
+
+    fun getLanguageSelection(): LanguageSelection = readSelection()
+
+    fun setLanguageSelection(selection: LanguageSelection) {
+        prefs.edit()
+            .putString("language_selection", selection.encode())
+            .putString("language_name", selection.effectiveName)
+            .apply()
+        _selectionFlow.value = selection
+        _languageFlow.value = selection.effectiveName
     }
 
     /**
@@ -196,7 +219,8 @@ class PreferencesManager private constructor(context: Context) {
      * one. So an unrecognised name is not an error — the name still reaches the model as
      * context, it just does not also become a `language` field.
      */
-    fun getLanguageCode(): String = languageCodeFor(getSpokenLanguage())
+    fun getLanguageCode(): String =
+        if (getLanguageSelection().isSinglePinned) languageCodeFor(getSpokenLanguage()) else ""
 
     fun setLanguageCode(code: String) {
         setSpokenLanguage(languageFor(code).label.takeIf { code.isNotBlank() } ?: "")
@@ -244,6 +268,11 @@ class PreferencesManager private constructor(context: Context) {
         prefs.edit().putString("cleanup_preset", preset.name).apply()
         _presetFlow.value = preset
     }
+
+    /** Which tone the Home screen shows as picked, so a custom tone keeps its name. */
+    fun getHomeToneId(): String? = prefs.getString("home_tone_id", null)
+
+    fun setHomeToneId(id: String) = prefs.edit().putString("home_tone_id", id).apply()
 
     fun getCustomPrompt(): String {
         return prefs.getString("custom_prompt", "Rewrite clearly and remove filler words, maintaining natural flow.") ?: ""

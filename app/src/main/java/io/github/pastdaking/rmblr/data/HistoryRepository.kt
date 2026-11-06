@@ -69,6 +69,21 @@ class HistoryRepository private constructor(context: Context) {
         saveHistory(current)
     }
 
+    /** Put a deleted item back where it was in time order (used by Undo). */
+    fun restoreHistoryItem(item: DictationHistoryItem) {
+        if (_historyFlow.value.any { it.id == item.id }) return
+        val current = (_historyFlow.value + item).sortedByDescending { it.timestamp }.take(50)
+        _historyFlow.value = current
+        saveHistory(current)
+    }
+
+    /** Replace an item with the same id, for a rewrite in place. */
+    fun updateHistoryItem(item: DictationHistoryItem) {
+        val current = _historyFlow.value.map { if (it.id == item.id) item else it }
+        _historyFlow.value = current
+        saveHistory(current)
+    }
+
     fun clearHistory() {
         _historyFlow.value = emptyList()
         prefs.edit().remove("history_items").apply()

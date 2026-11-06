@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
-import com.github.takahirom.roborazzi.captureRoboImage
+import com.github.takahirom.roborazzi.captureScreenRoboImage
 import io.github.pastdaking.rmblr.ui.theme.Ink
 import io.github.pastdaking.rmblr.ui.theme.MyApplicationTheme
 import io.github.pastdaking.rmblr.ui.theme.ThemeChoice
@@ -41,9 +41,9 @@ abstract class ShotTest {
             }
         }
         rule.waitForIdle()
-        rule.onRoot().captureRoboImage("build/m3-proof/$name-light.png")
+        captureScreenRoboImage("build/m3-proof/$name-light.png")
         rule.runOnIdle { ThemeState.choice = ThemeChoice.DARK }
         rule.waitForIdle()
-        rule.onRoot().captureRoboImage("build/m3-proof/$name-dark.png")
+        captureScreenRoboImage("build/m3-proof/$name-dark.png")
     }
 }
