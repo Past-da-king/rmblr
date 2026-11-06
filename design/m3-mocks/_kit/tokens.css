@@ -1,0 +1,87 @@
+/* RMBLR M3 Expressive tokens. Seed: brand indigo #5A46F0 (light) / #7C6CFF (dark), near-black ink #0A0B0D.
+   Red = recording, green = done. Dark is switched with <html class="dark">. */
+:root {
+  --brand: #5a46f0;
+  --primary: #5a46f0;
+  --on-primary: #ffffff;
+  --primary-container: #e3deff;
+  --on-primary-container: #160a70;
+  --secondary: #5e5c78;
+  --on-secondary: #ffffff;
+  --secondary-container: #e3e1f7;
+  --on-secondary-container: #1a1933;
+  --tertiary: #0f6a78;
+  --on-tertiary: #ffffff;
+  --tertiary-container: #c3eaf1;
+  --on-tertiary-container: #001f25;
+  --error: #d6362f;
+  --on-error: #ffffff;
+  --error-container: #ffdad5;
+  --on-error-container: #410003;
+  --success: #1d7a4b;
+  --success-container: #c4f0d5;
+  --on-success-container: #00210f;
+
+  --surface: #f7f8fa;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f1f2f8;
+  --surface-container: #eceef6;
+  --surface-container-high: #e6e8f1;
+  --surface-container-highest: #e0e2ec;
+  --on-surface: #0a0b0d;
+  --on-surface-variant: #46474f;
+  --outline: #777882;
+  --outline-variant: #c8c9d3;
+  --scrim: rgba(10, 11, 20, .42);
+  --inverse-surface: #2e2f35;
+  --inverse-on-surface: #f1f0f7;
+
+  --r-xs: 4px; --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-lg-inc: 20px;
+  --r-xl: 28px; --r-xl-inc: 32px; --r-xxl: 48px; --r-full: 999px;
+
+  --e1: 0 1px 2px rgba(20, 16, 70, .10), 0 1px 3px 1px rgba(20, 16, 70, .06);
+  --e3: 0 4px 8px 3px rgba(20, 16, 70, .10), 0 1px 3px rgba(20, 16, 70, .16);
+  --e4: 0 6px 12px 4px rgba(20, 16, 70, .12), 0 2px 4px rgba(20, 16, 70, .16);
+
+  --font: 'Google Sans Flex', 'Roboto Flex', system-ui, sans-serif;
+}
+html.dark {
+  --brand: #7c6cff;
+  --primary: #a79cff;
+  --on-primary: #1c0f8a;
+  --primary-container: #3a2fb4;
+  --on-primary-container: #e3deff;
+  --secondary: #c8c5e4;
+  --on-secondary: #2e2d49;
+  --secondary-container: #3f3e5c;
+  --on-secondary-container: #e3e1f7;
+  --tertiary: #8fd3e0;
+  --on-tertiary: #00363f;
+  --tertiary-container: #004e5a;
+  --on-tertiary-container: #c3eaf1;
+  --error: #ff8a80;
+  --on-error: #5a0508;
+  --error-container: #8c1a1a;
+  --on-error-container: #ffdad5;
+  --success: #7fd9a1;
+  --success-container: #0b5230;
+  --on-success-container: #c4f0d5;
+
+  --surface: #0a0b0d;
+  --surface-container-lowest: #050608;
+  --surface-container-low: #111217;
+  --surface-container: #16171d;
+  --surface-container-high: #1f2027;
+  --surface-container-highest: #292a32;
+  --on-surface: #e6e6ee;
+  --on-surface-variant: #c5c6d0;
+  --outline: #8f909b;
+  --outline-variant: #3d3e48;
+  --scrim: rgba(0, 0, 0, .6);
+  --inverse-surface: #e6e6ee;
+  --inverse-on-surface: #2e2f35;
+
+  --e1: 0 1px 2px rgba(0, 0, 0, .4);
+  --e3: 0 4px 10px 2px rgba(0, 0, 0, .4), 0 1px 3px rgba(0, 0, 0, .5);
+  --e4: 0 6px 14px 4px rgba(0, 0, 0, .45), 0 2px 4px rgba(0, 0, 0, .5);
+}

@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=390">
+<link rel="stylesheet" href="_kit/fonts.css"><link rel="stylesheet" href="_kit/tokens.css"><link rel="stylesheet" href="_kit/components.css"><link rel="stylesheet" href="_kit/rmblr.css">
+</head><body>
+<script src="_kit/kit.js"></script><script src="_kit/kit2.js"></script>
+<script>
+// index.html?screen=01-home&theme=dark  loads screens/<screen>.js
+const SCREEN = new URLSearchParams(location.search).get('screen') || '01-home';
+document.write('<script src="screens/' + SCREEN + '.js"><\/script>');
+</script>
+</body></html>
