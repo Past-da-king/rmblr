@@ -188,11 +188,7 @@ fun Panel(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(if (tone == PanelTone.HERO) AccentWash else Surface)
-            .then(
-                if (tone == PanelTone.HERO) Modifier
-                else Modifier.border(1.dp, Line, shape)
-            )
+            .background(if (tone == PanelTone.HERO) AccentWash else Raised)
             .padding(padding),
         content = content
     )

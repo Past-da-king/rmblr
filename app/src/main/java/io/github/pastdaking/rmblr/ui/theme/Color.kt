@@ -55,7 +55,9 @@ data class DynamicPalette(
     val onAccent: Color
 )
 
-// Surfaces, furthest back to closest
+// Surfaces, furthest back to closest (M3 Expressive tonal steps).
+// Ink = surface, Surface = container-low, Raised = container, RaisedHigh and
+// RaisedHighest step further up. A tonal step replaces an outline wherever it can.
 val Ink: Color get() = when {
     Skin.amoled -> Color(0xFF000000)
     Skin.dynamic != null -> Skin.dynamic!!.ink
@@ -65,39 +67,65 @@ val Ink: Color get() = when {
 val Surface: Color get() = when {
     Skin.amoled -> Color(0xFF0B0B0D)
     Skin.dynamic != null -> Skin.dynamic!!.surface
-    Skin.dark -> Color(0xFF15171B)
-    else -> Color(0xFFFFFFFF)
+    Skin.dark -> Color(0xFF111217)
+    else -> Color(0xFFF1F2F8)
 }
 val Raised: Color get() = when {
     Skin.amoled -> Color(0xFF16171A)
     Skin.dynamic != null -> Skin.dynamic!!.raised
-    Skin.dark -> Color(0xFF1E2127)
-    else -> Color(0xFFECEEF2)
+    Skin.dark -> Color(0xFF16171D)
+    else -> Color(0xFFECEEF6)
+}
+val RaisedHigh: Color get() = when {
+    Skin.amoled -> Color(0xFF1C1D21)
+    Skin.dynamic != null -> Skin.dynamic!!.raised
+    Skin.dark -> Color(0xFF1F2027)
+    else -> Color(0xFFE6E8F1)
+}
+val RaisedHighest: Color get() = when {
+    Skin.amoled -> Color(0xFF26272C)
+    Skin.dynamic != null -> Skin.dynamic!!.line
+    Skin.dark -> Color(0xFF292A32)
+    else -> Color(0xFFE0E2EC)
 }
 val Line: Color get() = when {
-    Skin.amoled -> Color(0xFF262A31)
+    Skin.amoled -> Color(0xFF2E2F36)
     Skin.dynamic != null -> Skin.dynamic!!.line
-    Skin.dark -> Color(0xFF2B2F37)
-    else -> Color(0xFFDCE0E6)
+    Skin.dark -> Color(0xFF3D3E48)
+    else -> Color(0xFFC8C9D3)
 }
 
 // Text
 val TextHigh: Color get() = Skin.dynamic?.textHigh
-    ?: if (Skin.dark) Color(0xFFEDEFF3) else Color(0xFF14161A)
+    ?: if (Skin.dark) Color(0xFFE6E6EE) else Color(0xFF0A0B0D)
 val TextMid: Color get() = Skin.dynamic?.textMid
-    ?: if (Skin.dark) Color(0xFF9AA1AD) else Color(0xFF5C6472)
+    ?: if (Skin.dark) Color(0xFFC5C6D0) else Color(0xFF46474F)
 val TextLow: Color get() = Skin.dynamic?.textLow
-    ?: if (Skin.dark) Color(0xFF666D7A) else Color(0xFF8B93A1)
+    ?: if (Skin.dark) Color(0xFF8F909B) else Color(0xFF777882)
 
-// Signals. The accent darkens slightly on light so it still passes against white.
-// The accent follows the wallpaper even in OLED black, which is the nicest of the two
-// together: a true black backdrop carrying your own colour.
+// Signals. Accent is the brand fill; AccentText is the lighter indigo used for text and
+// small controls on dark surfaces. The accent follows the wallpaper when dynamic colour is on.
 val Accent: Color get() = Skin.dynamic?.accent
     ?: if (Skin.dark) Color(0xFF7C6CFF) else Color(0xFF5A46F0)
+val AccentText: Color get() = Skin.dynamic?.accent
+    ?: if (Skin.dark) Color(0xFFA79CFF) else Color(0xFF5A46F0)
 val AccentWash: Color get() = Skin.dynamic?.accentWash
-    ?: if (Skin.dark) Color(0xFF23204A) else Color(0xFFE7E4FF)
-val Alert: Color get() = if (Skin.dark) Color(0xFFE05561) else Color(0xFFD03A48)
-val Good: Color get() = if (Skin.dark) Color(0xFF4FBF87) else Color(0xFF2E9B67)
+    ?: if (Skin.dark) Color(0xFF3A2FB4) else Color(0xFFE3DEFF)
+val OnAccentWash: Color get() = Skin.dynamic?.textHigh
+    ?: if (Skin.dark) Color(0xFFE3DEFF) else Color(0xFF160A70)
+val SecondaryWash: Color get() = if (Skin.dark) Color(0xFF3F3E5C) else Color(0xFFE3E1F7)
+val OnSecondaryWash: Color get() = if (Skin.dark) Color(0xFFE3E1F7) else Color(0xFF1A1933)
+val Teal: Color get() = if (Skin.dark) Color(0xFF8FD3E0) else Color(0xFF0F6A78)
+val TealWash: Color get() = if (Skin.dark) Color(0xFF004E5A) else Color(0xFFC3EAF1)
+
+/** Recording red. Same in light and dark so white glyphs keep their contrast. */
+val RecRed: Color get() = Color(0xFFD6362F)
+val Alert: Color get() = if (Skin.dark) Color(0xFFFF8A80) else Color(0xFFD6362F)
+val AlertWash: Color get() = if (Skin.dark) Color(0xFF8C1A1A) else Color(0xFFFFDAD5)
+val OnAlertWash: Color get() = if (Skin.dark) Color(0xFFFFDAD5) else Color(0xFF410003)
+val Good: Color get() = if (Skin.dark) Color(0xFF7FD9A1) else Color(0xFF1D7A4B)
+val GoodWash: Color get() = if (Skin.dark) Color(0xFF0B5230) else Color(0xFFC4F0D5)
+val OnGoodWash: Color get() = if (Skin.dark) Color(0xFFC4F0D5) else Color(0xFF00210F)
 
 /**
  * The wash behind the orb's arc and the translation bubble.

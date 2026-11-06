@@ -35,6 +35,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Mic
+import io.github.pastdaking.rmblr.ui.m3.FloatingNav
+import io.github.pastdaking.rmblr.ui.m3.FloatingNavItem
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Settings
@@ -68,7 +71,7 @@ import io.github.pastdaking.rmblr.ui.components.copyToClipboard
 import io.github.pastdaking.rmblr.ui.components.openUrl
 import io.github.pastdaking.rmblr.ui.components.Space
 import io.github.pastdaking.rmblr.ui.screens.HistoryScreen
-import io.github.pastdaking.rmblr.ui.screens.HomeScreen
+import io.github.pastdaking.rmblr.ui.screens.OrbSetupScreen
 import io.github.pastdaking.rmblr.ui.screens.SettingsScreen
 import io.github.pastdaking.rmblr.ui.screens.OnboardingPrefs
 import io.github.pastdaking.rmblr.ui.screens.OnboardingScreen
@@ -194,10 +197,10 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val navItems = listOf(
-                    NavItem("Orb", Icons.Default.Layers, "nav_tab_hub"),
-                    NavItem("Profiles", Icons.Default.Tune, "nav_tab_studio"),
-                    NavItem("History", Icons.Default.History, "nav_tab_history"),
-                    NavItem("Settings", Icons.Default.Settings, "nav_tab_settings")
+                    FloatingNavItem("Home", Icons.Default.Mic, "nav_tab_hub"),
+                    FloatingNavItem("Profiles", Icons.Default.Layers, "nav_tab_studio"),
+                    FloatingNavItem("History", Icons.Default.History, "nav_tab_history"),
+                    FloatingNavItem("Settings", Icons.Default.Settings, "nav_tab_settings")
                 )
 
                 // ---------------------------------------------------------- updates
@@ -282,7 +285,7 @@ class MainActivity : ComponentActivity() {
 
                         Box(modifier = Modifier.weight(1f)) {
                             when (selectedTabIndex) {
-                                0 -> HomeScreen(
+                                0 -> OrbSetupScreen(
                                     prefsManager = prefsManager,
                                     historyRepo = historyRepo,
                                     onNavigateToSettings = { selectedTabIndex = 3 }
@@ -295,90 +298,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-        }
-    }
-}
-
-/**
- * The bottom navigation, as a bar that floats rather than one bolted to the edge.
- *
- * A full-bleed navigation bar reads as chrome — the part of the screen the app did not
- * design. Lifting it off the edges, rounding it fully and letting the selected tab
- * spread into a filled pill is the Material 3 Expressive treatment, and it is the single
- * change that does most to stop this looking like a settings app.
- *
- * The selected tab is the only one that carries its label. Four words competing at the
- * bottom of every screen is noise; one word telling you where you are is navigation.
- */
-@Composable
-private fun FloatingNav(
-    items: List<NavItem>,
-    selected: Int,
-    onSelect: (Int) -> Unit
-) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Space.lg, vertical = Space.md)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.xs),
-            modifier = Modifier
-                .clip(RoundedCornerShape(Radius.pill))
-                .background(Surface)
-                .border(1.dp, Line, RoundedCornerShape(Radius.pill))
-                .padding(Space.sm)
-                .testTag("main_bottom_nav")
-        ) {
-            items.forEachIndexed { index, item ->
-                NavPill(
-                    item = item,
-                    selected = selected == index,
-                    onClick = { onSelect(index) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun NavPill(item: NavItem, selected: Boolean, onClick: () -> Unit) {
-    // Springs, not curves: the pill overshoots a touch as it takes the label in, which
-    // is what makes the switch feel like a physical thing moving rather than a redraw.
-    val weight by animateFloatAsState(
-        targetValue = if (selected) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 380f),
-        label = "nav_pill"
-    )
-    val tint = lerp(TextLow, OnAccent, weight)
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-        modifier = Modifier
-            .pressable(onClick = onClick)
-            .clip(RoundedCornerShape(Radius.pill))
-            .background(lerp(Surface, Accent, weight))
-            .padding(horizontal = (12 + 6 * weight).dp, vertical = 12.dp)
-            .testTag(item.testTag)
-    ) {
-        Icon(
-            imageVector = item.icon,
-            contentDescription = item.title,
-            tint = tint,
-            modifier = Modifier.size(22.dp)
-        )
-        if (weight > 0.01f) {
-            Spacer(Modifier.width((6 * weight).dp))
-            Text(
-                text = item.title,
-                color = tint,
-                maxLines = 1,
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.graphicsLayer { alpha = weight }
-            )
         }
     }
 }

@@ -124,7 +124,7 @@ private fun accessibilityEnabled(context: android.content.Context): Boolean {
 }
 
 @Composable
-fun HomeScreen(
+fun OrbSetupScreen(
     prefsManager: PreferencesManager,
     historyRepo: HistoryRepository,
     onNavigateToSettings: () -> Unit,

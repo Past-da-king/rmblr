@@ -1,101 +1,67 @@
 package io.github.pastdaking.rmblr.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import io.github.pastdaking.rmblr.R
 
 /**
- * One scale, four jobs: screen title, section label, body, caption.
- * Hierarchy comes from weight and size together, never from colour alone.
+ * Google Sans Flex, bundled as one variable font (SIL OFL, see docs/m3-build).
  *
- * Retuned for Material 3 Expressive, whose whole argument about type is that a timid
- * scale reads as a form and a confident one reads as a product. Headlines got
- * substantially larger and heavier with tighter tracking; labels went up a weight so a
- * button reads as a button. Body sizes are untouched — expressive is about emphasis,
- * and making the paragraph shout too would leave nothing to emphasise.
+ * One file serves every weight: each [Font] entry below pins the weight axis. Below
+ * Android 8 variation settings are ignored and the file renders at its default weight,
+ * which is a graceful fall back rather than a crash.
  */
-val Typography =
-  Typography(
-    displaySmall =
-      TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 40.sp,
-        lineHeight = 44.sp,
-        letterSpacing = (-1.4).sp,
-      ),
-    headlineMedium =
-      TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 34.sp,
-        lineHeight = 40.sp,
-        letterSpacing = (-1.0).sp,
-      ),
-    titleLarge =
-      TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 23.sp,
-        lineHeight = 29.sp,
-        letterSpacing = (-0.5).sp,
-      ),
-    titleMedium =
-      TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 17.sp,
-        lineHeight = 23.sp,
-        letterSpacing = (-0.2).sp,
-      ),
-    bodyLarge =
-      TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 15.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.sp,
-      ),
-    bodyMedium =
-      TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.sp,
-      ),
-    bodySmall =
-      TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 18.sp,
-        letterSpacing = 0.sp,
-      ),
-    labelLarge =
-      TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 15.sp,
-        lineHeight = 19.sp,
-        letterSpacing = 0.sp,
-      ),
-    labelMedium =
-      TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.6.sp,
-      ),
-    labelSmall =
-      TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 14.sp,
-        letterSpacing = 0.2.sp,
-      ),
-  )
+@OptIn(ExperimentalTextApi::class)
+val GoogleSansFlex: FontFamily = FontFamily(
+    listOf(400, 500, 600, 700).map { w ->
+        Font(
+            resId = R.font.google_sans_flex,
+            weight = FontWeight(w),
+            variationSettings = FontVariation.Settings(FontVariation.weight(w))
+        )
+    }
+)
+
+private fun style(
+    weight: FontWeight,
+    size: Int,
+    line: Int,
+    tracking: Double = 0.0
+) = TextStyle(
+    fontFamily = GoogleSansFlex,
+    fontWeight = weight,
+    fontSize = size.sp,
+    lineHeight = line.sp,
+    letterSpacing = tracking.sp
+)
+
+/**
+ * The expressive scale from the design: display-s 36/42, headline 24 to 32, emphasised
+ * titles. Weight does the work, so the paragraph sizes stay calm.
+ */
+val Typography = Typography(
+    displaySmall = style(FontWeight.Bold, 36, 42, -0.8),
+    headlineMedium = style(FontWeight.Bold, 32, 38, -0.6),
+    headlineSmall = style(FontWeight.SemiBold, 24, 30, -0.3),
+    titleLarge = style(FontWeight.SemiBold, 22, 28, -0.2),
+    titleMedium = style(FontWeight.SemiBold, 16, 22),
+    titleSmall = style(FontWeight.SemiBold, 14, 20),
+    bodyLarge = style(FontWeight.Normal, 16, 24),
+    bodyMedium = style(FontWeight.Normal, 14, 20),
+    bodySmall = style(FontWeight.Normal, 12, 16),
+    labelLarge = style(FontWeight.SemiBold, 14, 20),
+    labelMedium = style(FontWeight.SemiBold, 12, 16, 0.5),
+    labelSmall = style(FontWeight.SemiBold, 11, 16, 0.3),
+)
+
+/** Tracked-out caps used for eyebrows ("TONE", "LIVE TRANSCRIPT"). */
+val EyebrowStyle: TextStyle = style(FontWeight.SemiBold, 12, 16, 1.2)
+
+/** Big tabular timer digits on the recording screen. */
+val TimerStyle: TextStyle = style(FontWeight.Bold, 56, 60, -1.0).copy(fontFeatureSettings = "tnum")

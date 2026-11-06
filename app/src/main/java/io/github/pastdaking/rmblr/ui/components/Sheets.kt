@@ -1,5 +1,10 @@
 package io.github.pastdaking.rmblr.ui.components
 
+import androidx.compose.foundation.border
+import androidx.compose.runtime.getValue
+import io.github.pastdaking.rmblr.ui.theme.AccentText
+import io.github.pastdaking.rmblr.ui.theme.OnAccentWash
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -108,38 +113,41 @@ fun RmblrSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = state,
-        containerColor = Ink,
+        containerColor = Surface,
         contentColor = TextHigh,
-        dragHandle = null,
+        scrimColor = androidx.compose.ui.graphics.Color(0x66000000),
+        dragHandle = {
+            // Slim 32 x 4 grab bar, as drawn in the design.
+            Box(
+                modifier = Modifier
+                    .padding(top = Space.md, bottom = Space.sm)
+                    .width(32.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(TextLow.copy(alpha = 0.6f))
+            )
+        },
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Space.xl)
-                .padding(top = Space.lg, bottom = Space.xxl)
+                .padding(horizontal = Space.lg)
+                .padding(bottom = Space.xxl)
         ) {
-            // A short bar instead of a dialog title bar: it says "drag me" without
-            // spending a whole row on a heading and a close button.
-            Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier
-                        .width(36.dp)
-                        .clip(RoundedCornerShape(Radius.pill))
-                        .background(Line)
-                        .padding(vertical = 2.dp)
-                ) {}
+            if (title.isNotBlank()) {
+                Text(title, color = TextHigh, style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(Space.lg))
             }
-
-            Spacer(Modifier.height(Space.lg))
-            Text(title, color = TextHigh, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(Space.lg))
             content()
         }
     }
 }
 
-/** One choice inside a sheet. */
+/**
+ * One choice inside a sheet: 12dp row, and the selected one morphs to a 24dp pill in
+ * primary container with a check.
+ */
 @Composable
 fun SheetOption(
     title: String,
@@ -147,37 +155,47 @@ fun SheetOption(
     onClick: () -> Unit,
     supporting: String? = null
 ) {
+    val corner by androidx.compose.animation.core.animateFloatAsState(
+        if (selected) 24f else 12f,
+        androidx.compose.animation.core.spring(0.8f, 380f),
+        label = "sheet_option"
+    )
     Row(
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .pressable(onClick = onClick)
-            .clip(RoundedCornerShape(Radius.panel))
-            .background(if (selected) AccentWash else Surface)
-            .padding(Space.lg)
+            .heightIn(min = 64.dp)
+            .pressable(pressedScale = 0.985f, onClick = onClick)
+            .clip(RoundedCornerShape(corner.dp))
+            .background(if (selected) AccentWash else androidx.compose.ui.graphics.Color.Transparent)
+            .padding(horizontal = Space.lg, vertical = Space.sm)
     ) {
-        Column(
-            modifier = Modifier
-                .size(20.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (selected) Accent else Raised),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            if (selected) {
-                Icon(Icons.Default.Check, contentDescription = null, tint = Ink, modifier = Modifier.size(14.dp))
-            }
-        }
-        Spacer(Modifier.width(Space.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 title,
-                color = if (selected) Accent else TextHigh,
+                color = if (selected) OnAccentWash else TextHigh,
                 style = MaterialTheme.typography.titleMedium
             )
             if (supporting != null) {
                 Spacer(Modifier.height(2.dp))
-                Text(supporting, color = TextMid, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    supporting,
+                    color = if (selected) OnAccentWash.copy(alpha = 0.8f) else TextMid,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        Spacer(Modifier.width(Space.lg))
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(24.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (selected) AccentText else androidx.compose.ui.graphics.Color.Transparent)
+                .then(if (selected) Modifier else Modifier.border(2.dp, TextLow, RoundedCornerShape(12.dp)))
+        ) {
+            if (selected) {
+                Icon(Icons.Default.Check, contentDescription = null, tint = Ink, modifier = Modifier.size(16.dp))
             }
         }
     }
