@@ -177,7 +177,10 @@ fun TonalTextField(
     maxLines: Int = 1,
     imeAction: ImeAction = ImeAction.Default,
     onImeAction: (() -> Unit)? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    visualTransformation: androidx.compose.ui.text.input.VisualTransformation =
+        androidx.compose.ui.text.input.VisualTransformation.None,
+    label: String? = null
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
@@ -192,6 +195,7 @@ fun TonalTextField(
         interactionSource = interaction,
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = TextHigh),
         cursorBrush = SolidColor(Accent),
+        visualTransformation = visualTransformation,
         keyboardOptions = KeyboardOptions(imeAction = imeAction),
         keyboardActions = KeyboardActions(onAny = { onImeAction?.invoke() }),
         modifier = modifier,
@@ -210,11 +214,20 @@ fun TonalTextField(
                 if (leadingIcon != null) {
                     Icon(leadingIcon, null, tint = TextMid, modifier = Modifier.size(24.dp))
                 }
-                Box(Modifier.weight(1f)) {
-                    if (value.isEmpty()) {
-                        Text(placeholder, color = TextMid, style = MaterialTheme.typography.bodyLarge)
+                Column(Modifier.weight(1f)) {
+                    if (label != null) {
+                        Text(
+                            label,
+                            color = if (focused) AccentText else TextMid,
+                            style = MaterialTheme.typography.labelMedium
+                        )
                     }
-                    inner()
+                    Box {
+                        if (value.isEmpty()) {
+                            Text(placeholder, color = TextMid, style = MaterialTheme.typography.bodyLarge)
+                        }
+                        inner()
+                    }
                 }
                 trailing?.invoke()
             }

@@ -51,6 +51,12 @@ class UpdateRepository private constructor(context: Context) {
     private val _autoCheck = MutableStateFlow(prefs.getBoolean(KEY_AUTO, true))
     val autoCheck: StateFlow<Boolean> = _autoCheck.asStateFlow()
 
+    /** Lets a screenshot test show a given answer without asking GitHub. */
+    @androidx.annotation.VisibleForTesting
+    internal fun setStatusForTest(status: UpdateStatus) {
+        _status.value = status
+    }
+
     /** The version this APK is, e.g. "2.5.3". */
     val installedVersion: String get() = BuildConfig.VERSION_NAME
 
