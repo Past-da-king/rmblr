@@ -1,7 +1,5 @@
 package io.github.pastdaking.rmblr.ui.screens
 
-import io.github.pastdaking.rmblr.data.LanguageRules
-import io.github.pastdaking.rmblr.data.LanguageState
 import io.github.pastdaking.rmblr.data.Provider
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -74,53 +72,5 @@ class SettingsLogicTest {
         val result = KeyTester.test(Provider.CUSTOM, "sk-123456", "")
         assertFalse(result.ok)
         assertTrue(result.message.contains("base URL"))
-    }
-
-    // ---------------------------------------------------------------- languages
-
-    @Test fun `a language saved before the card existed reads back as one language with auto off`() {
-        val state = LanguageRules.read("Zulu", autoFlag = null, hintsRaw = null, singleRaw = null)
-        assertFalse(state.auto)
-        assertEquals("Zulu", state.single)
-        assertEquals("Zulu", state.spokenName)
-    }
-
-    @Test fun `a blank language reads back as auto with no hints`() {
-        val state = LanguageRules.read("", null, null, null)
-        assertTrue(state.auto)
-        assertEquals("", state.spokenName)
-    }
-
-    @Test fun `auto with hints names them as a list`() {
-        val state = LanguageState(auto = true, hints = listOf("French", "Spanish"), single = "")
-        assertEquals("French, Spanish", state.spokenName)
-    }
-
-    @Test fun `switching auto on keeps the single language for later`() {
-        val before = LanguageRules.read("Zulu", null, null, null)
-        val auto = before.copy(auto = true)
-        assertEquals("", auto.spokenName)
-        assertEquals("Zulu", auto.single)
-        assertEquals("Zulu", auto.copy(auto = false).spokenName)
-    }
-
-    @Test fun `hints are trimmed, unique and capped`() {
-        var s = LanguageState(true, emptyList(), "")
-        s = LanguageRules.withHint(s, " French ")
-        s = LanguageRules.withHint(s, "french")
-        s = LanguageRules.withHint(s, "")
-        assertEquals(listOf("French"), s.hints)
-        for (i in 1..10) s = LanguageRules.withHint(s, "Lang$i")
-        assertEquals(LanguageRules.MAX_HINTS, s.hints.size)
-    }
-
-    @Test fun `removing a hint ignores case`() {
-        val s = LanguageState(true, listOf("French", "Spanish"), "")
-        assertEquals(listOf("Spanish"), LanguageRules.withoutHint(s, "french").hints)
-    }
-
-    @Test fun `the hint list survives being written and read`() {
-        val list = listOf("isiZulu", "Afrikaans")
-        assertEquals(list, LanguageRules.parseList(LanguageRules.writeList(list)))
     }
 }

@@ -37,7 +37,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import io.github.pastdaking.rmblr.data.LanguageRules
 import io.github.pastdaking.rmblr.data.PreferencesManager
 import io.github.pastdaking.rmblr.data.SUGGESTED_LANGUAGES
 import io.github.pastdaking.rmblr.ui.components.RmblrSheet
@@ -56,28 +55,27 @@ import io.github.pastdaking.rmblr.ui.theme.SecondaryWash
 import io.github.pastdaking.rmblr.ui.theme.TextHigh
 import io.github.pastdaking.rmblr.ui.theme.TextMid
 
-private enum class LanguageSheet { ADD_HINT, SINGLE, WRITE_IN, TRANSLATE_TO }
+private enum class LangSheet { SELECT, WRITE_IN, TRANSLATE_TO }
 
 /**
  * The Languages part of Settings: say what you speak, or leave it to the model.
  *
- * Auto-detect is the default and the recommendation. Naming extra languages while it is on
- * does not narrow anything; it only tells the model which ones are likely to turn up, which
- * helps when two of them sound alike. Turn auto-detect off and it becomes one named
- * language, the way the old single field worked.
+ * It edits the same [LanguageSelection] as the picker on the home screen. Auto-detect is the
+ * default; with it on, the names listed are only hints about what is likely to turn up. With
+ * it off they are the languages you speak, one or several for mixed speech.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LanguagesSection(prefs: PreferencesManager, modifier: Modifier = Modifier) {
-    val state by prefs.languageStateFlow.collectAsState()
+    val selection by prefs.languageSelectionFlow.collectAsState()
     val writeIn by prefs.dictationLanguageFlow.collectAsState()
     val target by prefs.translateTargetFlow.collectAsState()
-    var sheet by remember { mutableStateOf<LanguageSheet?>(null) }
+    var sheet by remember { mutableStateOf<LangSheet?>(null) }
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.sm)) {
         TonalCard(padding = PaddingValues(Space.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.pressable(pressedScale = 0.99f) {
-                prefs.setLanguageState(state.copy(auto = !state.auto))
+                prefs.setLanguageSelection(selection.withAuto(!selection.auto))
             }) {
                 Column(Modifier.weight(1f)) {
                     Text("Auto-detect", color = TextHigh, style = MaterialTheme.typography.titleMedium)
@@ -88,75 +86,52 @@ fun LanguagesSection(prefs: PreferencesManager, modifier: Modifier = Modifier) {
                     )
                 }
                 Spacer(Modifier.width(Space.md))
-                TickSwitch(state.auto, { prefs.setLanguageState(state.copy(auto = it)) }, Modifier.testTag("switch_auto_detect"))
+                TickSwitch(
+                    selection.auto,
+                    { prefs.setLanguageSelection(selection.withAuto(it)) },
+                    Modifier.testTag("switch_auto_detect")
+                )
             }
 
             Spacer(Modifier.height(Space.md))
             HorizontalDivider(color = Line)
             Spacer(Modifier.height(Space.md))
 
-            if (state.auto) {
-                Text("Also expect", color = TextHigh, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(Space.sm))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
-                    verticalArrangement = Arrangement.spacedBy(Space.sm)
-                ) {
-                    state.hints.forEach { name ->
-                        RemovableChip(name, onRemove = { prefs.setLanguageState(LanguageRules.withoutHint(state, name)) })
-                    }
-                    if (state.hints.size < LanguageRules.MAX_HINTS) {
-                        AssistChip(
-                            label = "Add language",
-                            icon = Icons.Default.Add,
-                            onClick = { sheet = LanguageSheet.ADD_HINT },
-                            modifier = Modifier.testTag("add_language")
-                        )
-                    }
+            Text(
+                if (selection.auto) "Also expect" else "Languages you speak",
+                color = TextHigh,
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(Modifier.height(Space.sm))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                verticalArrangement = Arrangement.spacedBy(Space.sm)
+            ) {
+                selection.names.forEach { name ->
+                    RemovableChip(name, onRemove = { prefs.setLanguageSelection(selection.toggle(name)) })
                 }
-            } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().pressable(pressedScale = 0.99f) { sheet = LanguageSheet.SINGLE }
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Language you speak", color = TextHigh, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            state.single.ifBlank { "Choose one" },
-                            color = TextMid,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                    Icon(Icons.Default.ChevronRight, null, tint = TextMid)
-                }
+                AssistChip(
+                    label = "Add language",
+                    icon = Icons.Default.Add,
+                    onClick = { sheet = LangSheet.SELECT },
+                    modifier = Modifier.testTag("add_language")
+                )
             }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            LanguageRow(0, 2, "Write dictation in", writeIn.ifBlank { "Same as I spoke" }) { sheet = LanguageSheet.WRITE_IN }
-            LanguageRow(1, 2, "Translate into", target.ifBlank { "English" }) { sheet = LanguageSheet.TRANSLATE_TO }
+            LanguageRow(0, 2, "Write dictation in", writeIn.ifBlank { "Same as I spoke" }) { sheet = LangSheet.WRITE_IN }
+            LanguageRow(1, 2, "Translate into", target.ifBlank { "English" }) { sheet = LangSheet.TRANSLATE_TO }
         }
     }
 
     when (sheet) {
-        LanguageSheet.ADD_HINT -> LanguagePickerSheet(
-            title = "Also expect",
-            explanation = "Tell the model which other languages are likely to turn up. It still detects each word for itself.",
-            current = state.hints,
-            allowBlank = false,
-            onPick = { prefs.setLanguageState(LanguageRules.withHint(state, it)) },
-            onDismiss = { sheet = null },
-            closeOnPick = false
-        )
-        LanguageSheet.SINGLE -> LanguagePickerSheet(
-            title = "Language you speak",
-            explanation = "Type any language. It is only a name passed to the model, so it does not have to be on a list.",
-            current = listOf(state.single),
-            allowBlank = false,
-            onPick = { prefs.setLanguageState(state.copy(single = it)) },
+        LangSheet.SELECT -> LanguageSheet(
+            selection = selection,
+            onChange = { prefs.setLanguageSelection(it) },
             onDismiss = { sheet = null }
         )
-        LanguageSheet.WRITE_IN -> LanguagePickerSheet(
+        LangSheet.WRITE_IN -> LanguagePickerSheet(
             title = "Write dictation in",
             explanation = "Speak in one language and have it typed in another. Leave it on the first choice and your words go in exactly as spoken.",
             current = listOf(writeIn),
@@ -165,7 +140,7 @@ fun LanguagesSection(prefs: PreferencesManager, modifier: Modifier = Modifier) {
             onPick = { prefs.setDictationLanguage(it) },
             onDismiss = { sheet = null }
         )
-        LanguageSheet.TRANSLATE_TO -> LanguagePickerSheet(
+        LangSheet.TRANSLATE_TO -> LanguagePickerSheet(
             title = "Translate into",
             explanation = "Where translations land when you translate with the orb.",
             current = listOf(target),

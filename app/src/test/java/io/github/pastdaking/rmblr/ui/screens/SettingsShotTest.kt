@@ -6,7 +6,7 @@ import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
-import io.github.pastdaking.rmblr.data.LanguageState
+import io.github.pastdaking.rmblr.data.LanguageSelection
 import io.github.pastdaking.rmblr.data.PreferencesManager
 import io.github.pastdaking.rmblr.data.Provider
 import io.github.pastdaking.rmblr.update.UpdateRepository
@@ -25,7 +25,7 @@ class SettingsShotTest : ProofShotBase() {
         prefs.setProviderKey(Provider.GEMINI, "AIzaSyD-example-key-0000-3f9a")
         prefs.setProviderKey(Provider.GROQ, "gsk_exampleexampleexample_k2Qz")
         KeyChecks(context).passed(Provider.GEMINI, "AIzaSyD-example-key-0000-3f9a")
-        prefs.setLanguageState(LanguageState(auto = true, hints = listOf("French", "Spanish"), single = ""))
+        prefs.setLanguageSelection(LanguageSelection(auto = true, names = listOf("French", "Spanish")))
         // A fresh check on record means the page does not go to GitHub while it is drawn.
         context.getSharedPreferences("rmblr_updates", android.content.Context.MODE_PRIVATE)
             .edit().putLong("last_check_at", System.currentTimeMillis()).commit()
