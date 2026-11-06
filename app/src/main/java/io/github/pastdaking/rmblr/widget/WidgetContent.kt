@@ -102,29 +102,43 @@ fun Orb(size: Dp, phase: QuickPhase, modifier: GlanceModifier = GlanceModifier) 
     }
 }
 
+/**
+ * Glance containers hold at most ten children, so the bars sit in groups of eight
+ * inside an outer row of at most ten groups.
+ */
 @Composable
 private fun Waveform(levels: List<Float>, bars: Int) {
     val fractions = QuickFormat.waveBars(levels, bars)
-    Row(modifier = GlanceModifier.fillMaxWidth().height(34.dp), verticalAlignment = Alignment.CenterVertically, horizontalAlignment = Alignment.CenterHorizontally) {
-        fractions.forEachIndexed { index, f ->
-            if (index > 0) Spacer(GlanceModifier.width(3.dp))
-            Box(
-                modifier = GlanceModifier.width(3.dp).height((4f + f * 30f).dp)
-                    .background(GlanceTheme.colors.error)
-                    .cornerRadius(2.dp)
-            ) {}
+    Row(
+        modifier = GlanceModifier.fillMaxWidth().height(28.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        fractions.chunked(WAVE_GROUP).forEach { group ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                group.forEach { f ->
+                    Box(modifier = GlanceModifier.width(6.dp).height(28.dp), contentAlignment = Alignment.Center) {
+                        Box(
+                            modifier = GlanceModifier.width(3.dp).height((4f + f * 24f).dp)
+                                .background(GlanceTheme.colors.error).cornerRadius(2.dp)
+                        ) {}
+                    }
+                }
+            }
         }
     }
 }
+
+private const val WAVE_GROUP = 8
 
 @Composable
 private fun HistoryLine(row: WidgetRow, maxChars: Int, now: Long) {
     val context = LocalContext.current
     Row(
-        modifier = GlanceModifier.fillMaxWidth().padding(vertical = 5.dp).clickable(openAppAction(context)),
+        modifier = GlanceModifier.fillMaxWidth().padding(vertical = 3.dp).clickable(openAppAction(context)),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = GlanceModifier.size(28.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = GlanceModifier.size(24.dp), contentAlignment = Alignment.Center) {
             Image(
                 provider = ImageProvider(R.drawable.w_circle), contentDescription = null,
                 modifier = GlanceModifier.fillMaxSize(), colorFilter = ColorFilter.tint(GlanceTheme.colors.secondaryContainer)
@@ -239,10 +253,10 @@ fun HistoryWidgetContent(data: WidgetData, widthDp: Float = 320f) {
     Column(
         modifier = GlanceModifier.fillMaxSize().appWidgetBackground()
             .background(GlanceTheme.colors.surface).cornerRadius(28.dp)
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Orb(56.dp, data.phase, orbClick(context, data.phase))
+            Orb(52.dp, data.phase, orbClick(context, data.phase))
             Spacer(GlanceModifier.width(12.dp))
             Column(modifier = GlanceModifier.defaultWeight()) {
                 Text(
@@ -297,10 +311,10 @@ fun HistoryWidgetContent(data: WidgetData, widthDp: Float = 320f) {
                 }
             }
         }
-        Spacer(GlanceModifier.height(8.dp))
+        Spacer(GlanceModifier.height(6.dp))
         if (recording) {
-            Waveform(data.levels, bars = ((widthDp - 28f) / 6f).toInt().coerceIn(20, 48))
-            Spacer(GlanceModifier.height(4.dp))
+            Waveform(data.levels, bars = (((widthDp - 28f) / 6f).toInt() / WAVE_GROUP * WAVE_GROUP).coerceIn(16, 80))
+            Spacer(GlanceModifier.height(2.dp))
         } else {
             Box(modifier = GlanceModifier.fillMaxWidth().height(1.dp).background(GlanceTheme.colors.surfaceVariant)) {}
             Spacer(GlanceModifier.height(2.dp))
