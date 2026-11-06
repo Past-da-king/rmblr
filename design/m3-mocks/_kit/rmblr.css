@@ -61,3 +61,13 @@ html.dark .snack .act { color: #4a3ee0; }
 .words .done { color: var(--on-surface); }
 .words .guess { color: var(--on-surface-variant); opacity: .62; }
 .caret { display: inline-block; width: 3px; height: 1.05em; border-radius: 2px; background: var(--brand); vertical-align: -.17em; margin-left: 2px; }
+
+/* connected filter group: selected = filled tonal pill with icon + label, others icon buttons on 8dp inner corners */
+.fg { display: flex; gap: 2px; }
+.fg .fi { height: 40px; min-width: 48px; padding: 0 12px; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--surface-container-high); color: var(--on-surface-variant); border-radius: 8px; font: 600 14px/20px var(--font); white-space: nowrap; }
+.fg .fi:first-child { border-radius: 20px 8px 8px 20px; }
+.fg .fi:last-child { border-radius: 8px 20px 20px 8px; }
+.fg .fi.on { background: var(--secondary-container); color: var(--on-secondary-container); border-radius: 20px; padding: 0 16px 0 12px; }
+.fg .fi .i { font-size: 22px; width: 22px; height: 22px; }
+/* recording red is the same in light and dark so white glyphs keep contrast */
+.rec.live .core { background: #d6362f; }

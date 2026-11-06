@@ -53,7 +53,7 @@ function orb(state = 'idle', s = 56) {
   const bg = live ? 'var(--error)' : 'var(--brand)';
   const fg = live ? '#fff' : (document.documentElement.classList.contains('dark') ? '#0a0b0d' : '#fff');
   const bars = [.35, .65, 1, .65, .35].map((k, i) => `<i style="display:block;width:${s * .055}px;height:${s * .42 * k}px;border-radius:9px;background:${fg}"></i>`).join('');
-  return `<div style="width:${s}px;height:${s}px;border-radius:50%;background:${bg};box-shadow:${live ? '0 6px 20px rgba(214,54,47,.45)' : '0 6px 20px rgba(90,70,240,.40)'},0 0 0 ${s * .12}px ${live ? 'rgba(214,54,47,.18)' : 'rgba(90,70,240,.16)'};display:flex;align-items:center;justify-content:center;gap:${s * .05}px">${bars}</div>`;
+  return `<div style="width:${s}px;height:${s}px;border-radius:50%;background:${live ? '#d6362f' : bg};box-shadow:${live ? '0 6px 20px rgba(214,54,47,.45)' : '0 6px 20px rgba(90,70,240,.40)'},0 0 0 ${s * .12}px ${live ? 'rgba(214,54,47,.18)' : 'rgba(90,70,240,.16)'};display:flex;align-items:center;justify-content:center;gap:${s * .05}px">${bars}</div>`;
 }
 
 /* sample data: neutral, ordinary dictation */
@@ -76,3 +76,19 @@ const scrim = () => '<div class="scrim"></div>';
 /* a sheet: handle + content. use inside mount() after the dimmed screen */
 const sheet = (inner, pad = 36) => `${scrim()}<div class="sheet" style="padding-bottom:${pad}px"><div class="grab"></div>${inner}</div>`;
 const snack = (txt, act, bottom = 108) => `<div class="snack" style="bottom:${bottom}px">${txt}${act ? `<span class="act">${act}</span>` : ''}</div>`;
+
+/* generic fake chat app + keyboard for the orb overlay screens (no real brand). */
+function fakeChat(inputText, o = {}) {
+  const b = (t, me, tm) => `<div style="display:flex;justify-content:${me ? 'flex-end' : 'flex-start'}"><div style="max-width:250px;padding:10px 14px;border-radius:${me ? '20px 20px 6px 20px' : '20px 20px 20px 6px'};background:${me ? 'var(--tertiary-container)' : 'var(--surface-container-high)'};color:${me ? 'var(--on-tertiary-container)' : 'var(--on-surface)'};font:400 15px/21px var(--font)">${t}<div style="font:500 10px/12px var(--font);opacity:.6;text-align:right;margin-top:3px">${tm}</div></div></div>`;
+  const keys = r => r.split('').map(k => `<div style="flex:1;height:44px;border-radius:9px;background:var(--surface-container-high);display:grid;place-items:center;font:400 19px/1 var(--font);color:var(--on-surface)">${k}</div>`).join('');
+  return `
+<div class="abs" style="top:40px;left:0;right:0;height:64px;display:flex;align-items:center;gap:12px;padding:0 8px;background:var(--surface-container)"><div class="ib">${ic('arrow_back')}</div><div class="shp" style="width:40px;height:40px;${clip('cookie9')}background:var(--secondary-container);display:grid;place-items:center;font:700 16px var(--font);color:var(--on-secondary-container)">S</div><div style="flex:1"><div class="title-m-em">Sam</div><div class="body-s muted">online</div></div><div class="ib">${ic('call')}</div><div class="ib">${ic('more_vert')}</div></div>
+<div class="abs" style="top:116px;left:12px;right:12px;display:flex;flex-direction:column;gap:8px">
+  ${b('Are we still on for dinner tonight?', 0, '18:02')}${b('Yes! Which place did you pick?', 1, '18:03')}${b('The new noodle place by the station. Table is booked for 7:30.', 0, '18:03')}${b('Perfect, I will be there.', 1, '18:04')}${b('Great. Can you bring the board game?', 0, '18:05')}
+</div>
+<div class="abs" style="left:8px;right:8px;top:${o.inputTop || 500}px;display:flex;align-items:flex-end;gap:8px"><div class="ib surf" style="--bg:var(--surface-container-high)">${ic('add')}</div><div style="flex:1;min-height:48px;border-radius:24px;background:var(--surface-container-high);padding:12px 16px;font:400 16px/24px var(--font);box-shadow:inset 0 0 0 2px var(--outline-variant);color:${inputText ? 'var(--on-surface)' : 'var(--on-surface-variant)'}">${inputText || 'Message'}</div><div class="ib tonal">${ic('send', 'f')}</div></div>
+<div class="abs" style="left:0;right:0;bottom:0;height:282px;background:var(--surface-container-low);padding:12px 6px 0;display:flex;flex-direction:column;gap:9px;z-index:30">
+  <div style="display:flex;gap:5px">${keys('qwertyuiop')}</div><div style="display:flex;gap:5px;padding:0 18px">${keys('asdfghjkl')}</div><div style="display:flex;gap:5px;padding:0 6px"><div style="width:44px;height:44px;border-radius:9px;background:var(--surface-container-highest);display:grid;place-items:center">${ic('arrow_upward')}</div>${keys('zxcvbnm')}<div style="width:44px;height:44px;border-radius:9px;background:var(--surface-container-highest);display:grid;place-items:center">${ic('backspace')}</div></div>
+  <div style="display:flex;gap:5px"><div style="width:60px;height:44px;border-radius:9px;background:var(--surface-container-highest);display:grid;place-items:center;font:500 14px var(--font)">?123</div><div style="width:44px;height:44px;border-radius:9px;background:var(--surface-container-high);display:grid;place-items:center">${ic('mood')}</div><div style="flex:1;height:44px;border-radius:22px;background:var(--surface-container-high);display:grid;place-items:center" class="body-s muted">English</div><div style="width:44px;height:44px;border-radius:9px;background:var(--surface-container-highest);display:grid;place-items:center;font:600 22px var(--font)">.</div><div style="width:56px;height:44px;border-radius:22px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center">${ic('keyboard_return')}</div></div>
+</div>`;
+}
