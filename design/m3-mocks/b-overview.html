@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="_kit/fonts.css"><link rel="stylesheet" href="_kit/tokens.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1760px;background:var(--surface);color:var(--on-surface);font-family:var(--font);padding:56px 48px 56px}
+h1{font:700 48px/54px var(--font);letter-spacing:-1.2px}
+.sub{font:400 18px/26px var(--font);color:var(--on-surface-variant);margin-top:8px}
+.chips{display:flex;gap:10px;margin:24px 0 36px}
+.c{height:36px;padding:0 16px;border-radius:18px;display:flex;align-items:center;font:600 14px/20px var(--font);background:var(--primary-container);color:var(--on-primary-container)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:40px 28px}
+.cell{background:var(--surface-container);border-radius:28px;padding:16px 16px 14px}
+.pair{display:flex;gap:10px}
+.pair img{width:calc(50% - 5px);border-radius:18px;display:block;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.lab{display:flex;align-items:baseline;gap:10px;padding:14px 6px 0}
+.lab b{font:700 15px/20px var(--font);color:var(--primary)}
+.lab span{font:600 16px/20px var(--font)}
+</style></head><body>
+<h1>RMBLR, Material 3 Expressive</h1>
+<div class="sub">Design mocks, phone 390 x 844 dp. Each screen in light (left) and dark (right). Brand indigo, near-black ink, red for recording, green for done.</div>
+<div class="chips"><div class="c">Google Sans Flex</div><div class="c">Tonal surfaces</div><div class="c">Shape library</div><div class="c">Slide-up sheets only</div><div class="c">Bring your own key</div></div>
+<div class="grid" id="g"></div>
+<script>
+const names = (location.search.match(/list=([^&]*)/)||[])[1];
+const L = JSON.parse(decodeURIComponent(names));
+const nice = s => { const m = s.match(/^(\d+[a-z]?)-(.*)$/); const t = m[2].replace(/-/g,' '); return [m[1], t[0].toUpperCase()+t.slice(1)]; };
+document.getElementById('g').innerHTML = L.map(s => { const [n,t] = nice(s); return `<div class="cell"><div class="pair"><img src="png/${s}-light.png"><img src="png/${s}-dark.png"></div><div class="lab"><b>${n}</b><span>${t}</span></div></div>`; }).join('');
+</script></body></html>
