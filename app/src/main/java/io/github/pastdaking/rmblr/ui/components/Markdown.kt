@@ -52,6 +52,19 @@ fun ReleaseNotes(
             }
 
             when {
+                isBoldHeading(line) -> {
+                    // A line that is nothing but **bold** is a heading. New, Better and Fixed
+                    // each get their own colour so a long list of notes can be scanned.
+                    Spacer(Modifier.height(Space.lg))
+                    val title = line.removeSurrounding("**")
+                    Text(
+                        text = title,
+                        color = headingColour(title),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    previousWasBullet = false
+                }
+
                 line.startsWith("- ") || line.startsWith("* ") -> {
                     if (!previousWasBullet) Spacer(Modifier.height(Space.sm))
                     Bullet(inlineMarkdown(line.drop(2)))
@@ -120,5 +133,20 @@ internal fun inlineMarkdown(source: String): AnnotatedString = buildAnnotatedStr
         } else {
             append(part)
         }
+    }
+}
+
+/** True for a line that is a single bold span and nothing else. */
+internal fun isBoldHeading(line: String): Boolean =
+    line.length > 4 && line.startsWith("**") && line.endsWith("**") && line.indexOf("**", 2) == line.length - 2
+
+/** New is the brand colour, Better is teal, Fixed is green; anything else reads as New. */
+@Composable
+internal fun headingColour(title: String): androidx.compose.ui.graphics.Color {
+    val t = title.trim().lowercase()
+    return when {
+        t.startsWith("fix") -> io.github.pastdaking.rmblr.ui.theme.Good
+        t.startsWith("better") || t.startsWith("improve") -> io.github.pastdaking.rmblr.ui.theme.Teal
+        else -> io.github.pastdaking.rmblr.ui.theme.AccentText
     }
 }

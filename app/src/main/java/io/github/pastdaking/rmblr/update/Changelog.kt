@@ -55,6 +55,29 @@ If something on that list matters to you more than the rest of it, say so — Fe
 
     val entries: List<ChangelogEntry> = listOf(
         ChangelogEntry(
+            version = "2.7.0",
+            headline = "A new look, and a Settings page you can read",
+            notes = """
+Redrawn in Material 3 Expressive. Your keys, engine, tones, profiles and orb position carry over as they were.
+
+**New**
+- **Settings is one page.** Listening, Rewriting, API keys, Languages, Orb behaviour, Appearance, Typing and About, in that order, instead of five rooms to open one by one.
+- **Keys can be tested before you save them.** Tap a key, paste it, press Test, and the app makes one real request with it. A key reads Connected only after it has actually worked.
+- **Auto-detect is the default for language.** Turn it on and add the other languages you expect, or turn it off to name just one.
+- **A shorter walkthrough** of five steps. It ends on a permissions step that shows what is granted and what is still needed, and updates the moment you come back from Android's settings.
+
+**Better**
+- **Every choice and confirmation slides up from the bottom**, instead of a box in the middle of the screen.
+- **Profiles** show their apps and tone at a glance, and Choose apps has search, a count and a Clear button.
+- **The update and What is new sheets** list the changes under New, Better and Fixed.
+- **Light, dark, black and wallpaper colours** all follow the new palette.
+
+**Fixed**
+- Testing a key checks the key you typed, not the one saved earlier, so a wrong paste is caught before it replaces a good one.
+- Walkthrough pages scroll, so nothing is cut off on a short screen.
+""".trimIndent()
+        ),
+        ChangelogEntry(
             version = "2.6.2",
             headline = "AI Polish now works with live transcription",
             notes = """

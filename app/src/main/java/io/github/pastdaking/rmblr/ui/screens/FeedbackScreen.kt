@@ -2,27 +2,33 @@ package io.github.pastdaking.rmblr.ui.screens
 
 import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -39,59 +45,53 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.pastdaking.rmblr.BuildConfig
 import io.github.pastdaking.rmblr.data.PreferencesManager
-import io.github.pastdaking.rmblr.ui.components.Hairline
-import io.github.pastdaking.rmblr.ui.components.IconChip
-import io.github.pastdaking.rmblr.ui.components.Panel
-import io.github.pastdaking.rmblr.ui.components.PrimaryAction
-import io.github.pastdaking.rmblr.ui.components.QuietAction
-import io.github.pastdaking.rmblr.ui.components.Radius
-import io.github.pastdaking.rmblr.ui.components.SectionLabel
-import io.github.pastdaking.rmblr.ui.components.SettingRow
 import io.github.pastdaking.rmblr.ui.components.Space
 import io.github.pastdaking.rmblr.ui.components.copyToClipboard
 import io.github.pastdaking.rmblr.ui.components.openUrl
 import io.github.pastdaking.rmblr.ui.components.pressable
+import io.github.pastdaking.rmblr.ui.m3.Eyebrow
+import io.github.pastdaking.rmblr.ui.m3.GroupedRow
+import io.github.pastdaking.rmblr.ui.m3.SheetButton
+import io.github.pastdaking.rmblr.ui.m3.TonalCard
+import io.github.pastdaking.rmblr.ui.m3.TonalTextField
 import io.github.pastdaking.rmblr.update.GitHubReleases
 import io.github.pastdaking.rmblr.ui.theme.Accent
 import io.github.pastdaking.rmblr.ui.theme.AccentWash
-import io.github.pastdaking.rmblr.ui.theme.Line
+import io.github.pastdaking.rmblr.ui.theme.Ink
 import io.github.pastdaking.rmblr.ui.theme.OnAccent
-import io.github.pastdaking.rmblr.ui.theme.Raised
+import io.github.pastdaking.rmblr.ui.theme.OnAccentWash
+import io.github.pastdaking.rmblr.ui.theme.RaisedHigh
 import io.github.pastdaking.rmblr.ui.theme.Surface
 import io.github.pastdaking.rmblr.ui.theme.TextHigh
-import io.github.pastdaking.rmblr.ui.theme.TextLow
 import io.github.pastdaking.rmblr.ui.theme.TextMid
 import java.net.URLEncoder
 
 /** What kind of thing is being sent. Decides the issue title and the label on it. */
-private enum class FeedbackKind(
+enum class FeedbackKind(
     val label: String,
-    val blurb: String,
     val icon: ImageVector,
-    val titlePrefix: String
+    val titlePrefix: String,
+    val prompt: String
 ) {
-    BUG("Something's broken", "It did the wrong thing, or nothing at all", Icons.Default.BugReport, "Bug"),
-    IDEA("An idea", "Something it should do and does not", Icons.Default.Lightbulb, "Idea"),
-    QUESTION("A question", "You cannot work out how something works", Icons.Default.HelpOutline, "Question")
+    BUG("Something is broken", Icons.Default.BugReport, "Bug", "Steps, what you saw, what you expected"),
+    IDEA("An idea", Icons.Default.Lightbulb, "Idea", "What should it do?"),
+    QUESTION("A question", Icons.Default.HelpOutline, "Question", "What is not making sense?")
 }
 
 /**
- * The Feedback room in Settings.
+ * Feedback: a report written here and handed to GitHub.
  *
  * There is no server behind RMBLR and there is not going to be one, so there is nowhere
- * for a "Send" button to send anything to. Rather than pretend — a contact form that
- * quietly posts into a void is worse than no contact form — this writes the report and
- * hands it to GitHub, where the repository already is and where an answer can be public
- * and useful to the next person with the same problem.
- *
- * The version and phone details are attached because they are the first two things anyone
- * triaging a bug has to ask for, and asking costs a round trip through someone who has
- * already lost interest. The switch is there because they are still that person's details
- * to withhold.
+ * for a Send button to send anything to. The report is composed here and opened as a
+ * prefilled GitHub issue, where an answer can be public and useful to the next person
+ * with the same problem. The version and phone details are attached because they are the
+ * first two things anyone triaging a bug has to ask for; the switch is there because they
+ * are still that person's details to withhold.
  */
 @Composable
-fun FeedbackSettings(
+fun FeedbackScreen(
     prefsManager: PreferencesManager,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -99,184 +99,187 @@ fun FeedbackSettings(
 
     var kind by remember { mutableStateOf(FeedbackKind.BUG) }
     var body by remember { mutableStateOf("") }
-    var attachDetails by remember { mutableStateOf(true) }
+    var attach by remember { mutableStateOf(true) }
 
-    val details = remember(attachDetails, engine) {
-        if (!attachDetails) "" else buildString {
-            append("\n\n---\n")
-            append("RMBLR ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n")
-            append("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n")
-            append("${Build.MANUFACTURER} ${Build.MODEL}\n")
-            // The engine, because half of everything reported as "dictation is broken" is
-            // one provider having a bad day rather than the app. No key, obviously.
-            append("Dictation: ${engine.label} via ${engine.provider.label}\n")
-        }
+    val details = remember(attach, engine) {
+        if (!attach) "" else deviceDetails(
+            versionName = BuildConfig.VERSION_NAME,
+            versionCode = BuildConfig.VERSION_CODE,
+            androidRelease = Build.VERSION.RELEASE,
+            sdk = Build.VERSION.SDK_INT,
+            manufacturer = Build.MANUFACTURER,
+            model = Build.MODEL,
+            engineLine = "${engine.label} via ${engine.provider.label}"
+        )
     }
-
-    val report = body.trim() + details
+    val report = composeReport(body, details)
     val canSend = body.isNotBlank()
 
-    Column(
-        verticalArrangement = Arrangement.spacedBy(Space.sm),
-        modifier = modifier.fillMaxWidth().testTag("feedback_settings")
-    ) {
-        SectionLabel("What is it")
-
-        Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
-            FeedbackKind.values().forEach { entry ->
-                KindRow(entry, selected = entry == kind) { kind = entry }
-            }
+    Column(modifier.fillMaxSize().background(Ink).testTag("feedback_screen")) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().background(Surface).padding(horizontal = Space.lg, vertical = Space.md)
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back to settings",
+                tint = TextHigh,
+                modifier = Modifier.size(24.dp).pressable(onClick = onBack)
+            )
+            Spacer(Modifier.width(Space.lg))
+            Text("Feedback", color = TextHigh, style = MaterialTheme.typography.titleLarge)
         }
 
-        Spacer(Modifier.height(Space.lg))
-        SectionLabel("In your own words")
-
-        OutlinedTextField(
-            value = body,
-            onValueChange = { body = it },
+        Column(
+            verticalArrangement = Arrangement.spacedBy(Space.sm),
             modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 160.dp)
-                .testTag("feedback_body"),
-            shape = RoundedCornerShape(Radius.control),
-            textStyle = MaterialTheme.typography.bodyMedium,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Accent,
-                unfocusedBorderColor = Line,
-                focusedTextColor = TextHigh,
-                unfocusedTextColor = TextHigh,
-                cursorColor = Accent,
-                focusedContainerColor = Raised,
-                unfocusedContainerColor = Raised
-            ),
-            placeholder = {
-                Text(
-                    text = when (kind) {
-                        FeedbackKind.BUG -> "What were you doing, and what happened instead?"
-                        FeedbackKind.IDEA -> "What should it do?"
-                        FeedbackKind.QUESTION -> "What is not making sense?"
-                    },
-                    color = TextLow,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Space.lg)
+                .padding(top = Space.lg, bottom = Space.navClear)
+        ) {
+            Eyebrow("What is it about", modifier = Modifier.padding(horizontal = Space.sm, vertical = Space.sm))
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                FeedbackKind.values().forEach { entry ->
+                    KindCard(entry, selected = entry == kind, modifier = Modifier.weight(1f)) { kind = entry }
+                }
             }
-        )
 
-        Spacer(Modifier.height(Space.sm))
+            Spacer(Modifier.height(Space.xs))
+            TonalTextField(
+                value = body,
+                onValueChange = { body = it },
+                placeholder = kind.prompt,
+                minLines = 5,
+                maxLines = 12,
+                modifier = Modifier.fillMaxWidth().testTag("feedback_body")
+            )
 
-        Panel {
-            SettingRow(
-                label = "Attach version and phone",
-                supporting = if (attachDetails)
-                    "RMBLR ${BuildConfig.VERSION_NAME} · Android ${Build.VERSION.RELEASE} · ${Build.MODEL}"
-                else
-                    "Nothing about your device will be included",
-                trailing = {
-                    Switch(
-                        checked = attachDetails,
-                        onCheckedChange = { attachDetails = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = OnAccent,
-                            checkedTrackColor = Accent,
-                            uncheckedThumbColor = TextLow,
-                            uncheckedTrackColor = Raised
+            TonalCard(padding = PaddingValues(horizontal = Space.lg, vertical = Space.md), onClick = { attach = !attach }) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Attach version and phone", color = TextHigh, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (attach) "RMBLR ${BuildConfig.VERSION_NAME} · Android ${Build.VERSION.RELEASE}" else "Nothing about your device is included",
+                            color = TextMid,
+                            style = MaterialTheme.typography.bodyMedium
                         )
-                    )
+                    }
+                    Spacer(Modifier.width(Space.md))
+                    TickSwitch(attach, { attach = it })
                 }
-            )
-        }
+            }
 
-        Spacer(Modifier.height(Space.sm))
-
-        PrimaryAction(
-            text = "Open a GitHub issue",
-            icon = Icons.Default.OpenInNew,
-            enabled = canSend,
-            onClick = {
-                val url = newIssueUrl(kind, report)
-                if (!openUrl(context, url)) {
-                    copyToClipboard(context, "RMBLR feedback", report)
-                }
-            },
-            modifier = Modifier.fillMaxWidth().testTag("feedback_send")
-        )
-        Spacer(Modifier.height(Space.sm))
-        QuietAction(
-            text = "Copy it instead",
-            icon = Icons.Default.ContentCopy,
-            onClick = { copyToClipboard(context, "RMBLR feedback", report) },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(Modifier.height(Space.lg))
-
-        Panel {
-            SettingRow(
-                label = "Read what others have said",
-                supporting = "Open issues on GitHub — yours may already be there",
-                icon = Icons.Default.OpenInNew,
-                onClick = { openUrl(context, GitHubReleases.ISSUES_URL) }
-            )
-            Hairline()
-            SettingRow(
-                label = "The code itself",
-                supporting = "github.com/${GitHubReleases.OWNER}/${GitHubReleases.REPO}",
-                icon = Icons.Default.OpenInNew,
+            Spacer(Modifier.height(Space.xs))
+            SheetButton(
+                label = "Open a GitHub issue",
                 onClick = {
-                    openUrl(context, "https://github.com/${GitHubReleases.OWNER}/${GitHubReleases.REPO}")
+                    if (canSend) {
+                        val url = newIssueUrl(kind, report)
+                        if (!openUrl(context, url)) copyToClipboard(context, "RMBLR feedback", report)
+                    }
+                },
+                container = if (canSend) Accent else RaisedHigh,
+                content = if (canSend) OnAccent else TextMid,
+                modifier = Modifier.fillMaxWidth().testTag("feedback_send")
+            )
+            SheetButton(
+                label = "Copy it instead",
+                onClick = { if (canSend) copyToClipboard(context, "RMBLR feedback", report) },
+                container = AccentWash,
+                content = OnAccentWash,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(Space.md))
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LinkRow(0, 2, Icons.Default.Forum, "Read what others have said", "Open issues on GitHub") {
+                    if (!openUrl(context, GitHubReleases.ISSUES_URL)) copyToClipboard(context, "Issues", GitHubReleases.ISSUES_URL)
                 }
+                LinkRow(1, 2, Icons.Default.Code, "The code itself", "github.com/${GitHubReleases.OWNER}/${GitHubReleases.REPO}") {
+                    val url = "https://github.com/${GitHubReleases.OWNER}/${GitHubReleases.REPO}"
+                    if (!openUrl(context, url)) copyToClipboard(context, "Repository", url)
+                }
+            }
+
+            Text(
+                text = "Nothing is sent anywhere until you press one of the two buttons. A GitHub issue needs a free GitHub account.",
+                color = TextMid,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = Space.sm, vertical = Space.md)
             )
         }
-
-        Spacer(Modifier.height(Space.sm))
-        Text(
-            text = "Opening an issue needs a free GitHub account. If you would rather not " +
-                "have one, copy the report and send it however you like — it is the same " +
-                "text either way, and nothing is sent anywhere until you press one of " +
-                "these two buttons.",
-            color = TextLow,
-            style = MaterialTheme.typography.bodySmall
-        )
     }
 }
 
 @Composable
-private fun KindRow(kind: FeedbackKind, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .pressable(onClick = onClick)
-            .clip(RoundedCornerShape(Radius.panel))
-            .background(if (selected) AccentWash else Surface)
-            .padding(Space.lg)
+private fun KindCard(kind: FeedbackKind, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(if (selected) 24.dp else 28.dp)
+    Column(
+        modifier = modifier
+            .heightIn128()
+            .pressable(pressedScale = 0.97f, onClick = onClick)
+            .clip(shape)
+            .background(if (selected) AccentWash else RaisedHigh)
+            .then(if (selected) Modifier.border(2.dp, Accent, shape) else Modifier)
+            .padding(Space.lg),
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        IconChip(
-            icon = kind.icon,
-            tint = if (selected) Accent else TextMid,
-            container = if (selected) Surface else Raised,
-            size = 36.dp
+        Icon(kind.icon, null, tint = if (selected) OnAccentWash else TextHigh, modifier = Modifier.size(32.dp))
+        Text(
+            kind.label,
+            color = if (selected) OnAccentWash else TextHigh,
+            style = MaterialTheme.typography.titleMedium
         )
-        Spacer(Modifier.width(Space.lg))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                kind.label,
-                color = if (selected) Accent else TextHigh,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(kind.blurb, color = TextMid, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+private fun Modifier.heightIn128(): Modifier = this.then(Modifier.height(112.dp))
+
+@Composable
+private fun LinkRow(index: Int, count: Int, icon: ImageVector, title: String, supporting: String, onClick: () -> Unit) {
+    GroupedRow(index, count, onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+            Icon(icon, null, tint = TextHigh, modifier = Modifier.padding(horizontal = 6.dp))
+            Spacer(Modifier.width(Space.md))
+            Column(Modifier.weight(1f)) {
+                Text(title, color = TextHigh, style = MaterialTheme.typography.titleMedium)
+                Text(supporting, color = TextMid, style = MaterialTheme.typography.bodyMedium)
+            }
+            Icon(Icons.Default.ChevronRight, null, tint = TextHigh)
         }
     }
 }
+
+// ------------------------------------------------------------------ report text
+
+/** The device block appended to a report. No key, ever. */
+fun deviceDetails(
+    versionName: String,
+    versionCode: Int,
+    androidRelease: String,
+    sdk: Int,
+    manufacturer: String,
+    model: String,
+    engineLine: String
+): String = buildString {
+    append("\n\n---\n")
+    append("RMBLR $versionName ($versionCode)\n")
+    append("Android $androidRelease (API $sdk)\n")
+    append("$manufacturer $model\n")
+    append("Dictation: $engineLine\n")
+}
+
+fun composeReport(body: String, details: String): String = body.trim() + details
 
 /**
  * GitHub's prefilled-issue URL.
  *
  * Both parameters are encoded, because a report is free text and a stray ampersand in it
- * would otherwise truncate everything after it — which would look, to the person sending
+ * would otherwise truncate everything after it, which would look, to the person sending
  * it, exactly like the app silently losing half of what they wrote.
  */
-private fun newIssueUrl(kind: FeedbackKind, report: String): String {
+fun newIssueUrl(kind: FeedbackKind, report: String): String {
     val title = enc("${kind.titlePrefix}: ${report.lineSequence().firstOrNull().orEmpty().trim().take(70)}")
     return "${GitHubReleases.NEW_ISSUE_URL}?title=$title&body=${enc(report)}"
 }
