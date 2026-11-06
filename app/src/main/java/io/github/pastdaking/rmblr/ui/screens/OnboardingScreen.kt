@@ -1,49 +1,47 @@
 package io.github.pastdaking.rmblr.ui.screens
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.PanTool
+import androidx.compose.material.icons.filled.Swipe
+import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.animation.Crossfade
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,37 +50,49 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.compose.foundation.layout.offset
 import io.github.pastdaking.rmblr.data.PreferencesManager
-import io.github.pastdaking.rmblr.orb.FieldWatcherService
-import io.github.pastdaking.rmblr.orb.WaveMark
-import io.github.pastdaking.rmblr.ui.components.PrimaryAction
-import io.github.pastdaking.rmblr.ui.components.QuietAction
+import io.github.pastdaking.rmblr.data.Provider
 import io.github.pastdaking.rmblr.ui.components.Space
+import io.github.pastdaking.rmblr.ui.components.pressable
+import io.github.pastdaking.rmblr.ui.m3.AssistChip
+import io.github.pastdaking.rmblr.ui.m3.Eyebrow
+import io.github.pastdaking.rmblr.ui.m3.ExpressiveShapes
+import io.github.pastdaking.rmblr.ui.m3.M3Chip
+import io.github.pastdaking.rmblr.ui.m3.Radial
+import io.github.pastdaking.rmblr.ui.m3.RadialShape
+import io.github.pastdaking.rmblr.ui.m3.TonalCard
+import io.github.pastdaking.rmblr.ui.m3.TonalTextField
 import io.github.pastdaking.rmblr.ui.theme.Accent
+import io.github.pastdaking.rmblr.ui.theme.AccentText
 import io.github.pastdaking.rmblr.ui.theme.AccentWash
-import io.github.pastdaking.rmblr.ui.theme.Alert
-import io.github.pastdaking.rmblr.ui.theme.Good
+import io.github.pastdaking.rmblr.ui.theme.GoodWash
 import io.github.pastdaking.rmblr.ui.theme.Ink
-import io.github.pastdaking.rmblr.ui.theme.Line
 import io.github.pastdaking.rmblr.ui.theme.OnAccent
+import io.github.pastdaking.rmblr.ui.theme.OnAccentWash
 import io.github.pastdaking.rmblr.ui.theme.Raised
-import io.github.pastdaking.rmblr.ui.theme.Surface
+import io.github.pastdaking.rmblr.ui.theme.RaisedHigh
+import io.github.pastdaking.rmblr.ui.theme.RaisedHighest
+import io.github.pastdaking.rmblr.ui.theme.SecondaryWash
+import io.github.pastdaking.rmblr.ui.theme.TealWash
 import io.github.pastdaking.rmblr.ui.theme.TextHigh
 import io.github.pastdaking.rmblr.ui.theme.TextLow
 import io.github.pastdaking.rmblr.ui.theme.TextMid
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Whether the operator has been through onboarding. */
+/** Whether the walkthrough has been seen. Read once at start and written when it ends. */
 class OnboardingPrefs(context: Context) {
     private val prefs = context.getSharedPreferences("rmblr_onboarding", Context.MODE_PRIVATE)
     var done: Boolean
@@ -91,565 +101,457 @@ class OnboardingPrefs(context: Context) {
 }
 
 /**
- * First run.
- *
- * Every page shows the real component doing the real thing rather than describing it: the
- * actual orb, the actual arc, the actual waveform. A screenshot of a gesture teaches
- * nothing; watching the thing move does.
+ * The walkthrough: five steps, the last of which is the four permissions with a live
+ * granted or needed state for each.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OnboardingScreen(onDone: () -> Unit) {
     val context = LocalContext.current
+    val prefs = remember { PreferencesManager.getInstance(context) }
+    val pager = rememberPagerState(pageCount = { OnboardingFlow.STEPS })
     val scope = rememberCoroutineScope()
-    val pager = rememberPagerState(pageCount = { 7 })
+    val permissions by rememberPermissionState()
 
-    Column(modifier = Modifier.fillMaxSize().background(Ink)) {
-        HorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
-            when (page) {
-                0 -> Page(
-                    art = { SpeakItWritesArt() },
-                    title = "Speak. It writes.",
-                    body = "RMBLR turns what you say into clean, finished text, straight into whatever you were typing in. It can translate as it goes. No copying, no pasting."
-                )
-                1 -> Page(
-                    art = { OrbArt() },
-                    title = "It shows up when you type",
-                    body = "Tap any text box in any app and the orb appears next to it. Nowhere else. It is never sitting on your home screen getting in the way."
-                )
-                2 -> Page(
-                    art = { GestureArt(cycling = true) },
-                    title = "Tap, hold, flick",
-                    body = "Tap to dictate. Hold to choose a tone from the arc. Flick straight at one to skip the menu. Double tap to switch it between writing and translating. Drag it anywhere and it stays put."
-                )
-                3 -> Page(
-                    art = { ProfileArt() },
-                    title = "It knows where you are",
-                    body = "WhatsApp gets casual. Gmail gets professional. Slack gets somewhere in between. Pick the apps and the tones once, in Profiles."
-                )
-                4 -> Page(
-                    art = { TranslateArt() },
-                    title = "Say it in one language, write it in another",
-                    body = "Double tap the orb and it turns into a translator. Hold it and the arc shows your languages instead of your tones — flick at one and what you say lands there. Copy something in an app and tap the orb to read it back in your language."
-                )
-                5 -> PermissionsPage()
-                6 -> ApiKeyPage()
+    OnboardingContent(
+        step = pager.currentPage,
+        permissions = permissions,
+        onSkip = onDone,
+        onBack = { scope.launch { pager.animateScrollToPage(OnboardingFlow.clamp(pager.currentPage - 1)) } },
+        onNext = {
+            if (OnboardingFlow.isLast(pager.currentPage)) onDone()
+            else scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
+        },
+        pageContent = {
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { index ->
+                OnboardingPage(index, prefs)
             }
         }
+    )
+}
+
+/** The chrome around the pages: progress, Skip, Back and the big button. */
+@Composable
+fun OnboardingContent(
+    step: Int,
+    permissions: PermissionState,
+    onSkip: () -> Unit,
+    onBack: () -> Unit,
+    onNext: () -> Unit,
+    pageContent: @Composable () -> Unit
+) {
+    val last = OnboardingFlow.isLast(step)
+    val enabled = !last || OnboardingFlow.canFinish(permissions)
+    Column(Modifier.fillMaxSize().background(Ink).testTag("onboarding_screen")) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Space.xl).padding(top = Space.xxl, bottom = Space.sm)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm), modifier = Modifier.weight(1f)) {
+                repeat(OnboardingFlow.STEPS) { index ->
+                    Box(
+                        Modifier
+                            .weight(if (index == step) 3f else 1f)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(
+                                when {
+                                    index == step -> Accent
+                                    index < step -> Accent.copy(alpha = 0.4f)
+                                    else -> RaisedHighest
+                                }
+                            )
+                    )
+                }
+            }
+            Spacer(Modifier.width(Space.lg))
+            Text(
+                "Skip",
+                color = AccentText,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.pressable(onClick = onSkip).padding(vertical = 8.dp).testTag("onboarding_skip")
+            )
+        }
+
+        Box(Modifier.weight(1f)) { pageContent() }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Space.xl)
-                .padding(bottom = Space.xxl, top = Space.lg)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Space.lg).padding(bottom = Space.xl, top = Space.sm)
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm), modifier = Modifier.weight(1f)) {
-                repeat(7) { index ->
-                    Box(
-                        modifier = Modifier
-                            .size(width = if (index == pager.currentPage) 20.dp else 7.dp, height = 7.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (index == pager.currentPage) Accent else Line)
-                    )
+            if (step > 0) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(RaisedHighest)
+                        .pressable(onClick = onBack)
+                        .testTag("onboarding_back")
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextHigh)
                 }
+                Spacer(Modifier.width(Space.md))
             }
-
-            if (pager.currentPage < 6) {
-                QuietAction("Skip", onClick = onDone)
-                Spacer(Modifier.width(Space.sm))
-                PrimaryAction("Next", onClick = {
-                    scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
-                })
-            } else {
-                PrimaryAction("Start using it", onClick = onDone)
-            }
-        }
-    }
-}
-
-@Composable
-private fun Page(art: @Composable () -> Unit, title: String, body: String) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = Space.xl)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxWidth().weight(1f)
-        ) { art() }
-
-        Text(
-            text = title,
-            color = TextHigh,
-            style = MaterialTheme.typography.headlineMedium,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(Space.md))
-        Text(
-            text = body,
-            color = TextMid,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(bottom = Space.xxl)
-        )
-    }
-}
-
-/** The mark, alive: speech arriving as bars. */
-@Composable
-private fun WaveformArt() {
-    val motion = rememberInfiniteTransition(label = "wave")
-    val t by motion.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
-        label = "wave_t"
-    )
-
-    Canvas(modifier = Modifier.size(width = 220.dp, height = 120.dp)) {
-        val bars = 9
-        val gap = size.width / (bars * 2f)
-        val barWidth = gap
-        for (i in 0 until bars) {
-            val centreBias = 1f - kotlin.math.abs(i - bars / 2f) / (bars / 2f)
-            val wobble = kotlin.math.sin((t * 6.28f) + i).toFloat() * 0.25f + 0.75f
-            val h = size.height * (0.18f + centreBias * 0.7f * wobble)
-            val x = gap + i * (barWidth + gap)
-            drawLine(
-                color = if (i == bars / 2) Accent else Accent.copy(alpha = 0.55f),
-                start = Offset(x, size.height / 2 - h / 2),
-                end = Offset(x, size.height / 2 + h / 2),
-                strokeWidth = barWidth,
-                cap = StrokeCap.Round
-            )
-        }
-    }
-}
-
-/** The orb sitting beside a text field, which is the whole promise of the app. */
-@Composable
-private fun OrbArt() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                contentAlignment = Alignment.CenterStart,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
                 modifier = Modifier
-                    .width(180.dp)
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Surface)
-                    .border(1.dp, Line, RoundedCornerShape(24.dp))
-                    .padding(horizontal = Space.lg)
+                    .weight(1f)
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(if (enabled) Accent else RaisedHighest)
+                    .pressable(enabled = enabled, onClick = onNext)
+                    .testTag("onboarding_next")
             ) {
-                Box(modifier = Modifier.size(width = 2.dp, height = 20.dp).background(Accent))
-            }
-            Spacer(Modifier.width(Space.md))
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(52.dp).clip(CircleShape).background(Raised)
-            ) {
-                WaveMark(size = 24.dp, tint = TextHigh)
-            }
-        }
-    }
-}
-
-/**
- * The arc, laid out the way it really opens.
- *
- * Positioned from a single centre point with trigonometry rather than hand-tuned padding,
- * which is what made the first version collide with itself: every chip was nudged
- * independently and they piled up on the right.
- */
-@Composable
-private fun GestureArt(cycling: Boolean = false) {
-    // The arc is the same arc either way, which is the point: a double tap swaps what is
-    // on it. Showing tones only, as this page used to, taught half the gesture.
-    var translating by remember { mutableStateOf(false) }
-    if (cycling) {
-        LaunchedEffect(Unit) {
-            while (true) {
-                delay(2600)
-                translating = !translating
-            }
-        }
-    }
-
-    val labels = if (translating) LANGUAGES_ON_ARC else listOf("Professional", "Clean up", "Casual", "Bullets", "Summary")
-    val radius = 118f
-    val chipWidth = 112.dp
-    val chipHeight = 32.dp
-
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(width = 320.dp, height = 300.dp)) {
-        labels.forEachIndexed { index, label ->
-            val degrees = -72f + index * 36f
-            val radians = Math.toRadians(degrees.toDouble())
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .offset(
-                        x = (radius * kotlin.math.cos(radians)).dp,
-                        y = (radius * kotlin.math.sin(radians)).dp
-                    )
-                    .width(chipWidth)
-                    .height(chipHeight)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (index == 2) Accent else Surface)
-                    .border(1.dp, if (index == 2) Accent else Line, RoundedCornerShape(16.dp))
-            ) {
-                Crossfade(targetState = label, label = "arc_chip") { shown ->
-                    Text(
-                        text = shown,
-                        color = if (index == 2) OnAccent else TextMid,
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
-
-        Crossfade(targetState = translating, label = "arc_centre") { translate ->
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(56.dp).clip(CircleShape).background(if (translate) Accent else Alert)
-            ) {
-                if (translate) {
-                    Icon(
-                        imageVector = Icons.Default.Translate,
-                        contentDescription = null,
-                        tint = OnAccent,
-                        modifier = Modifier.size(28.dp)
-                    )
-                } else {
-                    WaveMark(size = 26.dp, tint = OnAccent)
-                }
-            }
-        }
-    }
-}
-
-/** Two apps, two tones: the profiles idea in one picture. */
-@Composable
-private fun ProfileArt() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.md)) {
-        ProfileRow("Chat apps", "Casual", Accent)
-        ProfileRow("Email", "Professional", Good)
-        ProfileRow("Work chat", "Clean up", TextMid)
-    }
-}
-
-/** The languages the arc and the first page cycle through. */
-private val LANGUAGES_ON_ARC = listOf("Espa\u00f1ol", "\u65e5\u672c\u8a9e", "Fran\u00e7ais", "isiZulu", "\u4e2d\u6587")
-
-/**
- * Speech going in, and the writing coming out in a language that keeps changing.
- *
- * The first page used to promise transcription and nothing else, which made translation
- * read as an afterthought bolted on at the end of onboarding. The same sentence rewriting
- * itself in six languages says the whole app in one glance, before a word of body copy.
- */
-@Composable
-private fun SpeakItWritesArt() {
-    val written = listOf(
-        "Good morning" to TextHigh,
-        "Buenos d\u00edas" to Accent,
-        "\u304a\u306f\u3088\u3046" to Accent,
-        "Bonjour" to Accent,
-        "Sawubona" to Accent,
-        "\u65e9\u4e0a\u597d" to Accent
-    )
-    var index by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1700)
-            index = (index + 1) % written.size
-        }
-    }
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        WaveformArt()
-        Spacer(Modifier.height(Space.xl))
-        Crossfade(targetState = index, label = "written") { i ->
-            val (text, tint) = written[i]
-            Text(
-                text = text,
-                color = tint,
-                style = MaterialTheme.typography.headlineSmall,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Surface)
-                    .border(1.dp, Line, RoundedCornerShape(14.dp))
-                    .padding(horizontal = Space.xl, vertical = Space.md)
-            )
-        }
-    }
-}
-
-/**
- * The orb between two languages.
- *
- * Drawn rather than described because the point of translate mode is that it is the same
- * orb doing a second job, and a picture of one orb with a language either side says that
- * faster than a paragraph can.
- */
-@Composable
-private fun TranslateArt() {
-    var index by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1500)
-            index = (index + 1) % LANGUAGES_ON_ARC.size
-        }
-    }
-
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.md)) {
-        LanguageChip("English", TextMid, Surface)
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(64.dp).clip(CircleShape).background(Accent)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Translate,
-                contentDescription = null,
-                tint = OnAccent,
-                modifier = Modifier.size(30.dp)
-            )
-        }
-        Crossfade(targetState = index, label = "target_language") { i ->
-            LanguageChip(LANGUAGES_ON_ARC[i], OnAccent, Accent)
-        }
-    }
-}
-
-@Composable
-private fun LanguageChip(label: String, tint: androidx.compose.ui.graphics.Color, fill: androidx.compose.ui.graphics.Color) {
-    Text(
-        text = label,
-        color = tint,
-        style = MaterialTheme.typography.labelLarge,
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(fill)
-            .border(1.dp, if (fill == Surface) Line else fill, RoundedCornerShape(12.dp))
-            .padding(horizontal = Space.lg, vertical = Space.sm)
-    )
-}
-
-@Composable
-private fun ProfileRow(app: String, tone: String, tint: androidx.compose.ui.graphics.Color) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .width(260.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(Surface)
-            .border(1.dp, Line, RoundedCornerShape(14.dp))
-            .padding(Space.lg)
-    ) {
-        Text(app, color = TextHigh, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        Text(
-            text = tone,
-            color = tint,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(AccentWash)
-                .padding(horizontal = Space.sm, vertical = 4.dp)
-        )
-    }
-}
-
-/** The last page does the setup rather than telling you to go and find it. */
-@Composable
-private fun PermissionsPage() {
-    val context = LocalContext.current
-    var canOverlay by remember { mutableStateOf(false) }
-    var canWatch by remember { mutableStateOf(false) }
-
-    val owner = LocalLifecycleOwner.current
-    DisposableEffect(owner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                canOverlay = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
-                canWatch = accessibilityOn(context)
-            }
-        }
-        owner.lifecycle.addObserver(observer)
-        onDispose { owner.lifecycle.removeObserver(observer) }
-    }
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxSize().padding(horizontal = Space.xl)
-    ) {
-        Spacer(Modifier.height(Space.xxl))
-        Text("Two switches", color = TextHigh, style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(Space.md))
-        Text(
-            text = "Android will not let any app know you are typing, or write into another app's text box, without these. Nothing works until they are on.",
-            color = TextMid,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(Modifier.height(Space.xxl))
-
-        PermissionCard(
-            title = "Draw over other apps",
-            body = "Lets the orb sit above whatever you are typing in.",
-            granted = canOverlay,
-            onOpen = {
-                context.startActivity(
-                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+                Text(
+                    OnboardingFlow.primaryLabel(step),
+                    color = if (enabled) OnAccent else TextMid,
+                    style = MaterialTheme.typography.titleMedium
                 )
+                if (!last) {
+                    Spacer(Modifier.width(Space.sm))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = OnAccent, modifier = Modifier.size(20.dp))
+                }
             }
-        )
-
-        Spacer(Modifier.height(Space.md))
-
-        PermissionCard(
-            title = "RMBLR orb, under Accessibility",
-            body = "Lets it notice a text field and write your words into it.",
-            granted = canWatch,
-            onOpen = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-        )
-    }
-}
-
-@Composable
-private fun PermissionCard(title: String, body: String, granted: Boolean, onOpen: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Surface)
-            .border(1.dp, Line, RoundedCornerShape(14.dp))
-            .clickable(enabled = !granted) { onOpen() }
-            .padding(Space.lg)
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = TextHigh, style = MaterialTheme.typography.titleMedium)
-            Text(body, color = TextMid, style = MaterialTheme.typography.bodySmall)
-        }
-        Spacer(Modifier.width(Space.md))
-        if (granted) {
-            Icon(Icons.Default.CheckCircle, contentDescription = "On", tint = Good, modifier = Modifier.size(24.dp))
-        } else {
-            Text("Open", color = Accent, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
 
-private fun accessibilityOn(context: Context): Boolean {
-    val expected = "${context.packageName}/${FieldWatcherService::class.java.name}"
-    val enabled = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-    ).orEmpty()
-    return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+/** One step: its picture, its headline and what it says. Scrolls, so nothing is ever cut off. */
+@Composable
+fun OnboardingPage(index: Int, prefs: PreferencesManager) {
+    when (index) {
+        0 -> PageFrame("Speak. It writes.", "Say it out loud and the words land in whatever app you are typing in, cleaned up and ready to send.") { SpeakArt() }
+        1 -> PageFrame("It shows up when you type", "Tap into any text field and a small orb appears beside it. When you are not typing, it is not there.") { ShowsUpArt() }
+        2 -> PageFrame("Tap, hold, flick", "Tap to dictate. Hold to fan out your tones, then flick toward one. Double tap to translate.", art = { ArcArt() }) { GestureCards() }
+        3 -> KeyPage(prefs)
+        else -> PermissionsPage()
+    }
 }
 
-/**
- * The last thing, because nothing works without it.
- *
- * The app talks to Gemini directly on your own key rather than through a server of ours,
- * which means no account, no subscription and no one else holding your dictation. It also
- * means we have to actually ask for the key instead of hoping it is already there.
- */
 @Composable
-private fun ApiKeyPage() {
-    val context = LocalContext.current
-    val prefs = remember { PreferencesManager.getInstance(context) }
-    var key by remember { mutableStateOf(prefs.getUserApiKey()) }
-    var saved by remember { mutableStateOf(false) }
-
+private fun PageFrame(
+    title: String,
+    body: String,
+    art: (@Composable () -> Unit)? = null,
+    extra: @Composable () -> Unit
+) {
     Column(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = Space.xl)
     ) {
-        Spacer(Modifier.height(Space.xxl))
-
-        WaveMark(size = 48.dp, tint = Accent)
-
-        Spacer(Modifier.height(Space.xl))
-
-        Text("One key to finish", color = TextHigh, style = MaterialTheme.typography.headlineMedium)
+        // With an explicit art slot the picture is that, and the trailing lambda is the card row
+        // under the text; otherwise the trailing lambda is the picture.
+        Box(Modifier.fillMaxWidth().height(310.dp), contentAlignment = Alignment.Center) {
+            if (art != null) art() else extra()
+        }
+        Spacer(Modifier.height(Space.lg))
+        Text(title, color = TextHigh, style = MaterialTheme.typography.displaySmall)
         Spacer(Modifier.height(Space.md))
-        Text(
-            text = "RMBLR speaks to Gemini on your own API key. Nothing runs through a server of ours, so there is no account and no subscription, and your dictation is between you and the model. Groq, Mistral, OpenRouter and anything OpenAI-shaped work too — set those up later in Models and keys.",
-            color = TextMid,
-            style = MaterialTheme.typography.bodyMedium
-        )
-
+        Text(body, color = TextMid, style = MaterialTheme.typography.bodyLarge)
+        if (art != null) {
+            Spacer(Modifier.height(Space.lg))
+            extra()
+        }
         Spacer(Modifier.height(Space.xl))
+    }
+}
 
+// ------------------------------------------------------------------ pictures
+
+@Composable
+private fun Blob(shape: Radial, size: Dp, color: Color, modifier: Modifier = Modifier) {
+    Box(modifier.size(size).background(color, RadialShape(shape)))
+}
+
+@Composable
+private fun SpeakArt() {
+    Box(Modifier.fillMaxSize()) {
+        Blob(ExpressiveShapes.SoftBurst, 270.dp, AccentWash.copy(alpha = 0.55f), Modifier.align(Alignment.Center))
+        Blob(ExpressiveShapes.Cookie9, 200.dp, AccentWash, Modifier.align(Alignment.Center))
+        Blob(ExpressiveShapes.Cookie9, 128.dp, Accent, Modifier.align(Alignment.Center).offset(y = (-24).dp))
+        Icon(Icons.Default.Mic, null, tint = OnAccent, modifier = Modifier.align(Alignment.Center).offset(y = (-24).dp).size(58.dp))
+        Blob(ExpressiveShapes.Cookie9, 52.dp, TealWash, Modifier.align(Alignment.TopEnd))
+        Blob(ExpressiveShapes.Clover4, 40.dp, GoodWash, Modifier.align(Alignment.CenterStart).offset(y = (-50).dp))
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(Surface)
-                .border(1.dp, Line, RoundedCornerShape(14.dp))
-                .padding(Space.lg)
+            Modifier
+                .align(Alignment.Center)
+                .offset(x = 36.dp, y = 62.dp)
+                .shadow(6.dp, RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(24.dp))
+                .background(RaisedHigh)
+                .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
-            Text("Where to get one", color = TextHigh, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(Space.sm))
-            Text(
-                text = "Open Google AI Studio, sign in, then Get API key. It is free to start and takes about a minute.",
-                color = TextMid,
-                style = MaterialTheme.typography.bodySmall
-            )
-            Spacer(Modifier.height(Space.md))
-            PrimaryAction(
-                text = "Open AI Studio",
-                onClick = {
-                    runCatching {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey"))
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    }
-                }
+            Text("Running ten minutes late,", color = TextHigh, style = MaterialTheme.typography.bodyLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("start without me", color = TextLow, style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.width(2.dp))
+                Box(Modifier.width(3.dp).height(20.dp).clip(RoundedCornerShape(2.dp)).background(Accent))
+            }
+        }
+        Bars(Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp))
+    }
+}
+
+/** A row of voice bars, tallest in the middle and fading to dots at the edges. */
+@Composable
+private fun Bars(modifier: Modifier = Modifier) {
+    val heights = remember { listOf(0.1f, 0.1f, 0.14f, 0.2f, 0.32f, 0.5f, 0.45f, 0.7f, 0.62f, 0.85f, 1f, 0.8f, 0.9f, 0.6f, 0.75f, 0.4f, 0.55f, 0.3f, 0.2f, 0.14f, 0.1f, 0.1f) }
+    Row(modifier.height(48.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+        heights.forEachIndexed { i, h ->
+            val edge = (i < 3 || i > heights.size - 4)
+            Box(
+                Modifier
+                    .width(if (edge) 5.dp else 6.dp)
+                    .height((48 * h).dp.coerceAtLeast(5.dp))
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Accent.copy(alpha = if (edge) 0.35f else 0.85f))
             )
         }
+    }
+}
 
-        Spacer(Modifier.height(Space.lg))
+@Composable
+private fun ShowsUpArt() {
+    Box(Modifier.fillMaxSize()) {
+        Blob(ExpressiveShapes.Flower, 96.dp, TealWash, Modifier.align(Alignment.TopEnd).offset(x = 0.dp, y = (-10).dp))
+        Column(Modifier.fillMaxWidth(0.84f).align(Alignment.TopStart)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(36.dp))
+                    .background(Raised)
+                    .padding(Space.lg)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(40.dp).background(AccentWash, RadialShape(ExpressiveShapes.Cookie9)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Chat, null, tint = OnAccentWash, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(Modifier.width(Space.md))
+                    Column {
+                        Box(Modifier.width(120.dp).height(10.dp).clip(RoundedCornerShape(5.dp)).background(TextMid))
+                        Spacer(Modifier.height(6.dp))
+                        Box(Modifier.width(52.dp).height(8.dp).clip(RoundedCornerShape(4.dp)).background(TextLow))
+                    }
+                }
+                Spacer(Modifier.height(Space.md))
+                Box(Modifier.width(150.dp).height(28.dp).clip(RoundedCornerShape(14.dp)).background(RaisedHigh))
+                Spacer(Modifier.height(Space.sm))
+                Box(Modifier.align(Alignment.End).width(150.dp).height(28.dp).clip(RoundedCornerShape(14.dp)).background(AccentWash))
+            }
+            Spacer(Modifier.height(Space.md))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(RaisedHigh)
+                    .border(2.dp, Accent, RoundedCornerShape(28.dp))
+                    .padding(start = Space.lg)
+            ) {
+                Text("Message", color = TextMid, style = MaterialTheme.typography.bodyLarge)
+                Box(Modifier.padding(start = 2.dp).width(3.dp).height(20.dp).clip(RoundedCornerShape(2.dp)).background(Accent))
+            }
+            Spacer(Modifier.height(Space.md))
+            KeyboardRows()
+        }
+        // The orb, hanging off the right end of the field.
+        Box(
+            Modifier.align(Alignment.TopEnd).offset(x = (-12).dp, y = 148.dp).size(76.dp).background(Accent.copy(alpha = 0.18f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(Modifier.size(58.dp).shadow(8.dp, CircleShape).clip(CircleShape).background(Accent), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.GraphicEq, null, tint = OnAccent, modifier = Modifier.size(28.dp))
+            }
+        }
+    }
+}
 
-        OutlinedTextField(
+@Composable
+private fun KeyboardRows() {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(10, 9).forEach { count ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally)) {
+                repeat(count) { Box(Modifier.width(26.dp).height(38.dp).clip(RoundedCornerShape(9.dp)).background(Raised)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArcArt() {
+    val tones = listOf(
+        Triple("Summary", -6f, -122f),
+        Triple("Clean up", -112f, -78f),
+        Triple("Professional", 96f, -66f),
+        Triple("Casual", -128f, -8f),
+        Triple("Bullets", 114f, -8f)
+    )
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(300.dp, 250.dp)) {
+            val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 14f))
+            drawArc(
+                color = Color(0x66_5B45F0).copy(alpha = 0.35f),
+                startAngle = 200f, sweepAngle = 140f, useCenter = false,
+                topLeft = Offset(size.width * 0.05f, size.height * 0.02f),
+                size = androidx.compose.ui.geometry.Size(size.width * 0.9f, size.height * 0.95f),
+                style = Stroke(width = 4f, pathEffect = dash, cap = StrokeCap.Round)
+            )
+        }
+        tones.forEach { (label, x, y) ->
+            val selected = label == "Professional"
+            Text(
+                label,
+                color = if (selected) OnAccent else TextHigh,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier
+                    .offset(x = x.dp, y = y.dp)
+                    .then(if (selected) Modifier.shadow(8.dp, RoundedCornerShape(24.dp)) else Modifier)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(if (selected) Accent else RaisedHighest)
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            )
+        }
+        Box(Modifier.offset(y = 76.dp).size(90.dp).background(Accent.copy(alpha = 0.18f), CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(72.dp).clip(CircleShape).background(Accent), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.GraphicEq, null, tint = OnAccent, modifier = Modifier.size(34.dp))
+            }
+        }
+        Blob(ExpressiveShapes.Cookie9, 36.dp, TealWash, Modifier.align(Alignment.TopStart).offset(x = (-12).dp, y = (-6).dp))
+        Blob(ExpressiveShapes.Flower, 30.dp, GoodWash, Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-4).dp))
+    }
+}
+
+@Composable
+private fun GestureCards() {
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+        GestureCard(Icons.Default.TouchApp, "Tap", "Dictate", Modifier.weight(1f))
+        GestureCard(Icons.Default.PanTool, "Hold", "Fan the tones", Modifier.weight(1f))
+        GestureCard(Icons.Default.Swipe, "Flick", "Fire one", Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun GestureCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, meaning: String, modifier: Modifier) {
+    TonalCard(modifier = modifier, padding = PaddingValues(Space.md)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = AccentText, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(title, color = TextHigh, style = MaterialTheme.typography.titleMedium)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(meaning, color = TextMid, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+// ------------------------------------------------------------------ key step
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun KeyPage(prefs: PreferencesManager) {
+    val clipboard = LocalClipboardManager.current
+    var provider by remember { mutableStateOf(prefs.getEngine().provider) }
+    var key by remember(provider) { mutableStateOf(prefs.getProviderKey(provider)) }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = Space.xl)
+    ) {
+        Box(Modifier.fillMaxWidth().height(230.dp), contentAlignment = Alignment.Center) {
+            Blob(ExpressiveShapes.SoftBurst, 210.dp, TealWash, Modifier.align(Alignment.Center))
+            Blob(ExpressiveShapes.Gem, 122.dp, Accent, Modifier.align(Alignment.Center))
+            Icon(Icons.Default.Key, null, tint = OnAccent, modifier = Modifier.align(Alignment.Center).size(56.dp))
+            Blob(ExpressiveShapes.Cookie9, 44.dp, AccentWash, Modifier.align(Alignment.TopStart).offset(x = 8.dp, y = 4.dp))
+            Blob(ExpressiveShapes.Clover4, 40.dp, GoodWash, Modifier.align(Alignment.BottomEnd).offset(x = (-14).dp, y = (-8).dp))
+        }
+        Text("Bring your own key", color = TextHigh, style = MaterialTheme.typography.displaySmall)
+        Spacer(Modifier.height(Space.md))
+        Text("Paste a key from the provider you like. No account with us, ever.", color = TextMid, style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(Space.xl))
+        Eyebrow("Provider")
+        Spacer(Modifier.height(Space.sm))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.sm), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+            Provider.values().forEach { p ->
+                M3Chip(
+                    label = if (p == Provider.CUSTOM) "Custom" else p.label,
+                    selected = p == provider,
+                    onClick = { provider = p }
+                )
+            }
+        }
+        Spacer(Modifier.height(Space.xl))
+        TonalTextField(
             value = key,
             onValueChange = {
                 key = it.trim()
-                prefs.setUserApiKey(key)
-                saved = key.isNotBlank()
+                prefs.setProviderKey(provider, key)
+                if (key.isNotBlank()) useProviderForEverything(prefs, provider)
             },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(10.dp),
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Accent,
-                unfocusedBorderColor = Line,
-                focusedTextColor = TextHigh,
-                unfocusedTextColor = TextHigh,
-                cursorColor = Accent,
-                focusedContainerColor = Raised,
-                unfocusedContainerColor = Raised
-            ),
-            placeholder = { Text("Paste your key, AIzaSy...", color = TextLow, style = MaterialTheme.typography.bodyMedium) }
+            placeholder = provider.keyHint,
+            label = "${provider.label} API key",
+            visualTransformation = VisualTransformation.None,
+            trailing = {
+                AssistChip(
+                    label = "Paste",
+                    icon = Icons.Default.ContentPaste,
+                    onClick = {
+                        clipboard.getText()?.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                            key = it
+                            prefs.setProviderKey(provider, it)
+                            useProviderForEverything(prefs, provider)
+                        }
+                    }
+                )
+            },
+            modifier = Modifier.fillMaxWidth().testTag("onboarding_key")
         )
+        Spacer(Modifier.height(Space.md))
+        Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(horizontal = Space.sm)) {
+            Icon(Icons.Default.Lock, null, tint = TextMid, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(Space.md))
+            Text(
+                provider.note.substringBefore(". ").trimEnd('.') + ". The key lives on this phone and calls the provider directly.",
+                color = TextMid,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+        Spacer(Modifier.height(Space.xl))
+    }
+}
 
-        Spacer(Modifier.height(Space.sm))
+// ------------------------------------------------------------------ permissions
+
+@Composable
+private fun PermissionsPage() {
+    val permissions by rememberPermissionState()
+    val action = rememberPermissionAction()
+    PermissionsPageContent(permissions, action)
+}
+
+@Composable
+fun PermissionsPageContent(permissions: PermissionState, onAction: (Permission) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = Space.xl)
+    ) {
+        Spacer(Modifier.height(Space.lg))
+        Text("Four permissions", color = TextHigh, style = MaterialTheme.typography.displaySmall)
+        Spacer(Modifier.height(Space.md))
         Text(
-            text = if (saved) "Saved. You can change it any time in Settings." else "You can add it later in Settings, but nothing will transcribe until you do.",
-            color = if (saved) Good else TextLow,
-            style = MaterialTheme.typography.bodySmall
+            "Android asks you to switch these on yourself. Each one is for a single job.",
+            color = TextMid,
+            style = MaterialTheme.typography.bodyLarge
         )
-
-        Spacer(Modifier.height(Space.xxl))
+        Spacer(Modifier.height(Space.xl))
+        PermissionCards(permissions, onAction)
+        Spacer(Modifier.height(Space.xl))
     }
 }
