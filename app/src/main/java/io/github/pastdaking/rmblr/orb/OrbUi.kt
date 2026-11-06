@@ -1,5 +1,15 @@
 package io.github.pastdaking.rmblr.orb
 
+import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -147,11 +157,11 @@ fun Orb(
     )
 
     val body = when (phase) {
-        OrbPhase.RECORDING -> Alert
+        OrbPhase.RECORDING -> io.github.pastdaking.rmblr.ui.theme.RecRed
         OrbPhase.WORKING -> Accent
         OrbPhase.DONE -> Good
         OrbPhase.FAILED -> Alert
-        else -> Surface
+        else -> Accent
     }
 
     Box(
@@ -164,10 +174,12 @@ fun Orb(
                 scaleY = orbScale
             }
     ) {
-        if (phase == OrbPhase.RECORDING) {
-            Canvas(modifier = Modifier.matchParentSize()) {
-                drawCircle(color = Alert.copy(alpha = 0.22f), radius = (this.size.minDimension / 2f) * ring)
-            }
+        // A soft halo around the orb: red and swelling with the voice while recording,
+        // a still indigo ring the rest of the time.
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val halo = if (phase == OrbPhase.RECORDING) io.github.pastdaking.rmblr.ui.theme.RecRed else body
+            val alpha = if (phase == OrbPhase.RECORDING) 0.26f else 0.16f
+            drawCircle(color = halo.copy(alpha = alpha), radius = (this.size.minDimension / 2f) * ring)
         }
 
         Box(
@@ -190,13 +202,13 @@ fun Orb(
                     Icon(
                         imageVector = Icons.Default.Translate,
                         contentDescription = "Translate what you copied",
-                        tint = if (phase == OrbPhase.DONE) OnAccent else TextHigh,
+                        tint = OnAccent,
                         modifier = Modifier.size(size * 0.5f)
                     )
                 } else {
                     WaveMark(
                         size = size * 0.46f,
-                        tint = if (phase == OrbPhase.DONE) OnAccent else TextHigh,
+                        tint = OnAccent,
                         level = amplitude
                     )
                 }
@@ -262,17 +274,40 @@ fun OrbFan(
     items: List<String>,
     highlighted: Int,
     openRight: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hint: String = "Flick to a tone, release to dictate",
+    orbSize: Dp = ORB_SIZE
 ) {
-    val radius = 116.dp
-    val chipWidth = 128.dp
-    val chipHeight = 34.dp
+    val radius = 128.dp
+    val chipWidth = 136.dp
+    val chipHeight = 48.dp
     val margin = 8.dp
 
-    // Always a dark wash, whatever the theme — see [Scrim].
-    BoxWithConstraints(modifier = modifier.fillMaxSize().background(Scrim.copy(alpha = 0.42f))) {
+    // Always a dark wash, whatever the theme (see [Scrim]): it pushes the page back so the
+    // pills read clearly instead of fighting the text underneath.
+    BoxWithConstraints(modifier = modifier.fillMaxSize().background(Scrim.copy(alpha = 0.5f))) {
         val maxX = maxWidth - chipWidth - margin
         val maxY = maxHeight - chipHeight - margin
+
+        // The path the pills sit on, drawn as a faint dashed arc.
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val cx = centre.x.toPx()
+            val cy = centre.y.toPx()
+            val r = radius.toPx()
+            val start = if (openRight) -75f else 105f
+            drawArc(
+                color = Color.White.copy(alpha = 0.35f),
+                startAngle = start,
+                sweepAngle = 150f,
+                useCenter = false,
+                topLeft = Offset(cx - r, cy - r),
+                size = androidx.compose.ui.geometry.Size(r * 2, r * 2),
+                style = Stroke(
+                    width = 2.dp.toPx(),
+                    pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6f, 14f))
+                )
+            )
+        }
 
         items.forEachIndexed { index, preset ->
             val angle = fanAngleDegrees(index, items.size, openRight)
@@ -280,9 +315,7 @@ fun OrbFan(
             val dx = (radius.value * kotlin.math.cos(radians)).dp
             val dy = (radius.value * kotlin.math.sin(radians)).dp
 
-            // The arc points away from the parked edge, but a chip centred near the orb's own
-            // x still hangs off the screen. Clamping keeps every label fully readable, which
-            // matters more than the chip sitting exactly on the arc.
+            // Clamped so every label stays fully on screen, even next to an edge.
             val x = (centre.x + dx - chipWidth / 2).coerceIn(margin, maxOf(margin, maxX))
             val y = (centre.y + dy - chipHeight / 2).coerceIn(margin, maxOf(margin, maxY))
 
@@ -295,6 +328,37 @@ fun OrbFan(
                     .offset(x = x, y = y)
             )
         }
+
+        // The label is pinned to the top of the screen: that is the title bar of almost
+        // every app, never the message being replied to, and it stays clear of the arc.
+        val hintWidth = 240.dp
+        OrbHint(
+            hint,
+            Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 56.dp)
+                .width(hintWidth)
+        )
+    }
+}
+
+/** The one-line instruction under the orb while the arc is open. */
+@Composable
+fun OrbHint(text: String, modifier: Modifier = Modifier) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF2E2F35))
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = text,
+            color = Color(0xFFF1F0F7),
+            style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
+            textAlign = TextAlign.Center,
+            maxLines = 2
+        )
     }
 }
 
@@ -310,21 +374,26 @@ fun fanAngleDegrees(index: Int, count: Int, openRight: Boolean): Float {
 }
 
 @Composable
-private fun ActionChip(label: String, active: Boolean, modifier: Modifier = Modifier) {
+internal fun ActionChip(label: String, active: Boolean, modifier: Modifier = Modifier) {
+    val scale by animateFloatAsState(
+        targetValue = if (active) 1.08f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(0.8f, 380f),
+        label = "fan_chip"
+    )
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .clip(RoundedCornerShape(17.dp))
-            .background(if (active) Accent else Surface)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(24.dp))
+            .background(if (active) Accent else io.github.pastdaking.rmblr.ui.theme.RaisedHigh)
     ) {
         Text(
             text = label,
-            color = if (active) OnAccent else TextMid,
-            fontSize = 12.sp,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (active) OnAccent else TextHigh,
+            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
             maxLines = 1,
-            modifier = Modifier.padding(horizontal = 8.dp)
+            modifier = Modifier.padding(horizontal = 12.dp)
         )
     }
 }
@@ -334,11 +403,11 @@ private fun ActionChip(label: String, active: Boolean, modifier: Modifier = Modi
 fun OrbToast(text: String, tint: Color = TextHigh, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(Surface)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(io.github.pastdaking.rmblr.ui.theme.RaisedHigh)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
-        Text(text = text, color = tint, fontSize = 12.sp, maxLines = 2)
+        Text(text = text, color = tint, style = androidx.compose.material3.MaterialTheme.typography.labelLarge, maxLines = 2)
     }
 }
 
@@ -375,8 +444,8 @@ fun TranslationBubble(
             modifier = Modifier
                 .padding(horizontal = 20.dp)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(Surface)
+                .clip(RoundedCornerShape(28.dp))
+                .background(io.github.pastdaking.rmblr.ui.theme.Surface)
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
@@ -422,13 +491,97 @@ fun TranslationBubble(
 private fun BubbleAction(label: String, onClick: () -> Unit) {
     Text(
         text = label,
-        color = Accent,
+        color = io.github.pastdaking.rmblr.ui.theme.OnAccentWash,
         fontSize = 14.sp,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.SemiBold,
         textAlign = TextAlign.Center,
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .background(io.github.pastdaking.rmblr.ui.theme.AccentWash)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
     )
+}
+
+
+/**
+ * The words you are saying, shown above the orb while it records.
+ *
+ * It is a small bubble with a tail pointing down at the orb, capped at two lines and
+ * trimmed to the newest words, so it never grows over the conversation you are replying
+ * to. Settled words are solid, the engine's current guess is lighter. The host window is
+ * not touchable, so it can never get in the way of the app underneath.
+ *
+ * @param tailFromEnd true when the orb is on the right edge, so the tail hangs from the
+ *        bubble's right side; false for the left edge.
+ */
+@Composable
+fun RecordingCaption(
+    seconds: Int,
+    text: String,
+    tailFromEnd: Boolean,
+    orbSize: Dp,
+    modifier: Modifier = Modifier
+) {
+    val words = io.github.pastdaking.rmblr.ui.m3.splitLive(captionTail(text))
+    val bg = io.github.pastdaking.rmblr.ui.theme.RaisedHighest
+    Column(
+        horizontalAlignment = if (tailFromEnd) Alignment.End else Alignment.Start,
+        modifier = modifier.widthIn(max = 280.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(bg)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(io.github.pastdaking.rmblr.ui.theme.RecRed))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    io.github.pastdaking.rmblr.ui.m3.formatElapsed(seconds),
+                    color = TextHigh,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelLarge
+                )
+            }
+            if (text.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = androidx.compose.ui.text.buildAnnotatedString {
+                        withStyle(androidx.compose.ui.text.SpanStyle(color = TextHigh)) { append(words.settled) }
+                        withStyle(androidx.compose.ui.text.SpanStyle(color = TextMid.copy(alpha = 0.7f))) { append(words.guess) }
+                    },
+                    style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+        }
+        // The tail: a small triangle under the bubble, over the middle of the orb.
+        androidx.compose.foundation.Canvas(
+            Modifier
+                .padding(
+                    start = if (tailFromEnd) 0.dp else (orbSize / 2 - 8.dp).coerceAtLeast(8.dp),
+                    end = if (tailFromEnd) (orbSize / 2 - 8.dp).coerceAtLeast(8.dp) else 0.dp
+                )
+                .size(width = 16.dp, height = 8.dp)
+        ) {
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2, size.height); close()
+            }
+            drawPath(path, bg)
+        }
+    }
+}
+
+/**
+ * The newest words that fit a two line caption: at most [max] characters, starting on a
+ * word boundary so it never opens mid-word. Shorter text comes back untouched.
+ */
+fun captionTail(text: String, max: Int = 90): String {
+    val t = text.trim()
+    if (t.length <= max) return t
+    val cut = t.takeLast(max)
+    val space = cut.indexOf(' ')
+    return if (space in 0 until cut.length - 1) cut.substring(space + 1) else cut
 }

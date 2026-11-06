@@ -118,6 +118,15 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
     private var orbIdleOpacity by mutableStateOf(1f)
     private var orbFaded by mutableStateOf(false)
 
+    // The recording caption lives in its own untouchable window, above the orb, so it can
+    // never take a touch from the app underneath or grow over the conversation.
+    private var captionView: ComposeView? = null
+    private lateinit var captionParams: WindowManager.LayoutParams
+    private var captionVisible by mutableStateOf(false)
+    private var captionText by mutableStateOf("")
+    private var captionSeconds by mutableStateOf(0)
+    private var captionTailEnd by mutableStateOf(true)
+
     /** When the orb was last touched, or last had something to do. */
     private var lastActivityAt = System.currentTimeMillis()
 
@@ -236,7 +245,9 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
         runCatching { clipboard?.removePrimaryClipChangedListener(clipListener) }
         handler.removeCallbacksAndMessages(null)
         runCatching { rootView?.let { windowManager?.removeView(it) } }
+        runCatching { captionView?.let { windowManager?.removeView(it) } }
         rootView = null
+        captionView = null
         OrbState.setPhase(OrbPhase.IDLE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         super.onDestroy()
@@ -285,6 +296,63 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
 
         rootView = view
         runCatching { windowManager?.addView(view, params) }
+        addCaptionWindow(type)
+    }
+
+    private fun addCaptionWindow(type: Int) {
+        captionParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.BOTTOM or Gravity.END }
+        val cv = ComposeView(this).apply {
+            setViewTreeLifecycleOwner(this@OrbOverlayService)
+            setViewTreeViewModelStoreOwner(this@OrbOverlayService)
+            setViewTreeSavedStateRegistryOwner(this@OrbOverlayService)
+            visibility = View.GONE
+            setContent {
+                MyApplicationTheme {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = captionVisible,
+                        enter = androidx.compose.animation.fadeIn(),
+                        exit = androidx.compose.animation.fadeOut()
+                    ) {
+                        RecordingCaption(
+                            seconds = captionSeconds,
+                            text = captionText,
+                            tailFromEnd = captionTailEnd,
+                            orbSize = orbSize
+                        )
+                    }
+                }
+            }
+        }
+        captionView = cv
+        runCatching { windowManager?.addView(cv, captionParams) }
+    }
+
+    /** Keep the caption above the orb, showing the newest words, only while recording. */
+    private fun updateCaption() {
+        val recording = OrbState.phase.value == OrbPhase.RECORDING && !menuOpen && !bubbleOpen
+        captionVisible = recording
+        val cv = captionView ?: return
+        if (!recording) {
+            if (cv.visibility != View.GONE) cv.visibility = View.GONE
+            return
+        }
+        captionText = dictation.liveText.value
+        captionSeconds = ((System.currentTimeMillis() - recordingStartedAt) / 1000).toInt().coerceAtLeast(0)
+        val onRight = orbX + dp(orbPrefs.sizeDp) / 2 >= screenWidth() / 2
+        captionTailEnd = onRight
+        captionParams.gravity = Gravity.BOTTOM or (if (onRight) Gravity.END else Gravity.START)
+        captionParams.x = dp(8)
+        captionParams.y = (screenHeight() - orbY + dp(6)).coerceAtLeast(0)
+        if (cv.visibility != View.VISIBLE) cv.visibility = View.VISIBLE
+        runCatching { windowManager?.updateViewLayout(cv, captionParams) }
     }
 
     /** Puts the orb where the home screen says it should be, at the size it says. */
@@ -350,6 +418,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                 orbFaded = orbPrefs.idleFade && !busy &&
                     System.currentTimeMillis() - lastActivityAt >= orbPrefs.idleAfterSeconds * 1000L
 
+                updateCaption()
                 delay(150)
             }
         }
@@ -547,7 +616,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
             val profile = activeProfile()
             fanTones = listOf(profile.up, profile.left, profile.tap, profile.right, profile.down)
                 .distinct()
-                .take(5)
+                .take(4)
                 .map { tones.byId(it) }
             fanLanguages = emptyList()
             fanItems = fanTones.map { it.name }
@@ -617,7 +686,11 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
                         ),
                         items = fanItems,
                         highlighted = highlighted,
-                        openRight = fanOpensRight
+                        openRight = fanOpensRight,
+                        orbSize = orbSize,
+                        hint = if (OrbState.mode.value == OrbMode.TRANSLATE)
+                            "Flick to a language, release to translate"
+                        else "Flick to a tone, release to dictate"
                     )
                     Orb(
                         phase = phase,
