@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_orb_description">One tap to dictate</string>
+    <string name="widget_dictate_description">Dictate, with your last dictation underneath</string>
+    <string name="widget_history_description">Dictate, with a live waveform and your last two dictations</string>
+    <string name="tile_label">RMBLR</string>
+</resources>

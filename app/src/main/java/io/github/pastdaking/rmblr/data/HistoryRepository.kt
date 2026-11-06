@@ -6,9 +6,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
+import io.github.pastdaking.rmblr.widget.WidgetRefresher
 import org.json.JSONObject
 
 class HistoryRepository private constructor(context: Context) {
+
+    private val appContext = context.applicationContext
 
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences("ilight_history_prefs", Context.MODE_PRIVATE)
@@ -87,6 +90,7 @@ class HistoryRepository private constructor(context: Context) {
     fun clearHistory() {
         _historyFlow.value = emptyList()
         prefs.edit().remove("history_items").apply()
+        runCatching { WidgetRefresher.refresh(appContext) }
     }
 
     fun deleteHistoryItem(id: String) {
@@ -110,6 +114,8 @@ class HistoryRepository private constructor(context: Context) {
             array.put(obj)
         }
         prefs.edit().putString("history_items", array.toString()).apply()
+        // Widgets show the latest dictations.
+        runCatching { WidgetRefresher.refresh(appContext) }
     }
 
     private fun loadSnippets() {

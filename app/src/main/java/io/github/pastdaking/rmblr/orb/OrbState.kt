@@ -31,6 +31,14 @@ object OrbState {
     private val _inputFocused = MutableStateFlow(false)
     val inputFocused: StateFlow<Boolean> = _inputFocused.asStateFlow()
 
+    /** True while the orb service is alive. Read by the Quick Settings tile. */
+    private val _serviceRunning = MutableStateFlow(false)
+    val serviceRunning: StateFlow<Boolean> = _serviceRunning.asStateFlow()
+
+    fun setServiceRunning(running: Boolean) {
+        _serviceRunning.value = running
+    }
+
     private val _phase = MutableStateFlow(OrbPhase.IDLE)
     val phase: StateFlow<OrbPhase> = _phase.asStateFlow()
 

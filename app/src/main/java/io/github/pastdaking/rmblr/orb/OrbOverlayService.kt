@@ -49,6 +49,8 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.pastdaking.rmblr.MainActivity
 import io.github.pastdaking.rmblr.R
+import io.github.pastdaking.rmblr.quick.QuickNotifications
+import io.github.pastdaking.rmblr.quick.QuickTileService
 import io.github.pastdaking.rmblr.ai.DictationController
 import io.github.pastdaking.rmblr.ai.Translator
 import io.github.pastdaking.rmblr.audio.AudioRecorderManager
@@ -229,6 +231,8 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
 
         OrbState.setMode(orbPrefs.mode)
 
+        OrbState.setServiceRunning(true)
+        QuickTileService.requestRefresh(applicationContext)
         startForegroundNotification()
         addOverlay()
         watchVisibility()
@@ -249,6 +253,8 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
         rootView = null
         captionView = null
         OrbState.setPhase(OrbPhase.IDLE)
+        OrbState.setServiceRunning(false)
+        QuickTileService.requestRefresh(applicationContext)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         super.onDestroy()
     }
@@ -894,14 +900,7 @@ class OrbOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedS
         )
 
 
-        val notification: Notification = androidx.core.app.NotificationCompat.Builder(this, channelId)
-            .setContentTitle("RMBLR")
-            .setContentText("Ready when you tap a text field")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentIntent(open)
-            .setOngoing(true)
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MIN)
-            .build()
+        val notification: Notification = QuickNotifications.ready(this, channelId)
 
         // The orb only holds an overlay; it never records from this service. Claiming the
         // microphone type while idle is what Android 16 kills the process for.
